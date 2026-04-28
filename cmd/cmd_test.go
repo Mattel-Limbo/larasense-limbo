@@ -183,6 +183,14 @@ func TestAnalyzeCommand_Flags(t *testing.T) {
 	if formatFlag.DefValue != "human" {
 		t.Errorf("--format default = %q, want 'human'", formatFlag.DefValue)
 	}
+
+	noCacheFlag := f.Lookup("no-cache")
+	if noCacheFlag == nil {
+		t.Fatal("--no-cache flag not registered")
+	}
+	if noCacheFlag.DefValue != "false" {
+		t.Errorf("--no-cache default = %q, want 'false'", noCacheFlag.DefValue)
+	}
 }
 
 func TestRootCommand_HasSubcommands(t *testing.T) {

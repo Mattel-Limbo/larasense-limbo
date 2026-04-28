@@ -62,11 +62,11 @@ Status tracking untuk fitur-fitur larasense-limbo.
 
 | # | Fitur | Status | Catatan |
 |---|-------|--------|---------|
-| 33 | Multiple AI provider support | 📋 Planned | Anthropic, Gemini, Ollama endpoint configs |
+| 33 | Multiple AI provider support | ✅ Done | Provider presets: openai, anthropic, gemini, ollama, openrouter. `provider.name` auto-fills base_url/model/endpoint |
 | 34 | Custom prompt override | ✅ Done | `review.custom_prompt` di config, di-append ke system prompt |
-| 35 | GitHub PR comment integration | 📋 Planned | Post review sebagai PR comment via GitHub API |
+| 35 | GitHub PR comment integration | ✅ Done | `--github-pr owner/repo#number`, markdown comment via GitHub API |
 | 36 | Inline annotation output | ✅ Done | `--format github`, high→`::error`, medium→`::warning`, low→`::notice` |
-| 37 | Cache layer | 📋 Planned | Skip re-review file yang tidak berubah |
+| 37 | Cache layer | ✅ Done | SHA-256 hash per file, `.larasense-limbo-cache.json`, `--no-cache` flag |
 | 38 | Verbose/debug mode | ✅ Done | `--verbose` flag, log request/response body, timing, parsed issue count |
 | 39 | Config init command | ✅ Done | `larasense-limbo init` + `--force` flag, generate config template |
 | 40 | Version command | ✅ Done | `larasense-limbo version`, build info via `-ldflags` |
@@ -96,6 +96,6 @@ Status tracking untuk fitur-fitur larasense-limbo.
 | Reliability | 5 | 0 | 0 |
 | Testing | 6 | 2 | 0 |
 | CI/CD | 4 | 0 | 0 |
-| Planned Features | 5 | 3 | 0 |
+| Planned Features | 8 | 0 | 0 |
 | Future Ideas | 0 | 0 | 10 |
-| **Total** | **35** | **5** | **10** |
+| **Total** | **38** | **2** | **10** |

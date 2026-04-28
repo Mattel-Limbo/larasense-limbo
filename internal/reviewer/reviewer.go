@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/Mattel-Limbo/larasense-limbo/internal/ai"
+	"github.com/Mattel-Limbo/larasense-limbo/internal/cache"
 	"github.com/Mattel-Limbo/larasense-limbo/internal/config"
 	"github.com/Mattel-Limbo/larasense-limbo/internal/context"
 	"github.com/Mattel-Limbo/larasense-limbo/internal/diff"
@@ -24,13 +25,14 @@ type Result struct {
 
 // Reviewer orchestrates the full code review pipeline.
 type Reviewer struct {
-	cfg     *config.Config
-	verbose bool
+	cfg      *config.Config
+	verbose  bool
+	noCache  bool
 }
 
 // New creates a new Reviewer.
-func New(cfg *config.Config, verbose bool) *Reviewer {
-	return &Reviewer{cfg: cfg, verbose: verbose}
+func New(cfg *config.Config, verbose, noCache bool) *Reviewer {
+	return &Reviewer{cfg: cfg, verbose: verbose, noCache: noCache}
 }
 
 // Run executes the full review pipeline: diff → parse → context → AI → result.
@@ -79,15 +81,44 @@ func (r *Reviewer) Run(base, head string) (*Result, error) {
 
 	log.Printf("Analyzing %d Laravel files", len(reviewCtx.Files))
 
-	// Step 4: Build diff text for AI
+	// Step 4: Filter cached files (skip unchanged)
+	var filesToReview []context.FileContext
+	var reviewCache *cache.Cache
+
+	if !r.noCache {
+		reviewCache = cache.Load()
+		for _, f := range reviewCtx.Files {
+			if reviewCache.HasChanged(f.Path, f.DiffText) {
+				filesToReview = append(filesToReview, f)
+			} else {
+				log.Printf("Skipping %s (unchanged since last review)", f.Path)
+			}
+		}
+	} else {
+		filesToReview = reviewCtx.Files
+	}
+
+	if len(filesToReview) == 0 {
+		return &Result{
+			FilesCount: len(reviewCtx.Files),
+			Summary:    fmt.Sprintf("All %d file(s) unchanged since last review. Nothing to analyze.", len(reviewCtx.Files)),
+		}, nil
+	}
+
+	if len(filesToReview) < len(reviewCtx.Files) {
+		log.Printf("Reviewing %d of %d files (%d cached)", len(filesToReview), len(reviewCtx.Files), len(reviewCtx.Files)-len(filesToReview))
+	}
+
+	// Step 5: Build diff text for AI
 	var diffText strings.Builder
-	for _, f := range reviewCtx.Files {
+	for _, f := range filesToReview {
 		fmt.Fprintf(&diffText, "--- %s ---\n%s\n", f.Path, f.DiffText)
 	}
 
-	contextText := reviewCtx.FormatForAI()
+	filteredCtx := &context.ReviewContext{Files: filesToReview}
+	contextText := filteredCtx.FormatForAI()
 
-	// Step 5: Send to AI
+	// Step 6: Send to AI
 	log.Println("Sending to AI provider for analysis...")
 	client := ai.NewClient(&r.cfg.Provider, r.verbose)
 	aiResp, err := client.Analyze(diffText.String(), contextText, r.cfg.Review.CustomPrompt)
@@ -95,10 +126,20 @@ func (r *Reviewer) Run(base, head string) (*Result, error) {
 		return nil, fmt.Errorf("AI analysis: %w", err)
 	}
 
-	// Step 6: Apply filters
+	// Step 7: Apply filters
 	issues := filterIssues(aiResp.Issues, r.cfg)
 
-	// Step 7: Build result
+	// Step 8: Update cache
+	if reviewCache != nil {
+		for _, f := range filesToReview {
+			reviewCache.Update(f.Path, f.DiffText)
+		}
+		if err := reviewCache.Save(); err != nil {
+			log.Printf("Warning: failed to save cache: %v", err)
+		}
+	}
+
+	// Step 9: Build result
 	result := &Result{
 		Issues:     issues,
 		FilesCount: len(reviewCtx.Files),

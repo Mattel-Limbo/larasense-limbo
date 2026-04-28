@@ -211,6 +211,96 @@ func TestLoad_DefaultsApplied(t *testing.T) {
 	}
 }
 
+func TestLoad_ProviderPreset_OpenAI(t *testing.T) {
+	dir := t.TempDir()
+	configContent := `provider:
+  name: openai
+  api_key: test-key
+`
+	os.WriteFile(filepath.Join(dir, ".larasense-limbo.yml"), []byte(configContent), 0644)
+
+	origDir, _ := os.Getwd()
+	os.Chdir(dir)
+	defer os.Chdir(origDir)
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+	if cfg.Provider.BaseURL != "https://api.openai.com" {
+		t.Errorf("base_url = %q, want openai preset", cfg.Provider.BaseURL)
+	}
+	if cfg.Provider.Model != "gpt-4.1" {
+		t.Errorf("model = %q, want 'gpt-4.1'", cfg.Provider.Model)
+	}
+}
+
+func TestLoad_ProviderPreset_Ollama(t *testing.T) {
+	dir := t.TempDir()
+	configContent := `provider:
+  name: ollama
+`
+	os.WriteFile(filepath.Join(dir, ".larasense-limbo.yml"), []byte(configContent), 0644)
+
+	origDir, _ := os.Getwd()
+	os.Chdir(dir)
+	defer os.Chdir(origDir)
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v (ollama should not require api_key)", err)
+	}
+	if cfg.Provider.BaseURL != "http://localhost:11434" {
+		t.Errorf("base_url = %q, want ollama preset", cfg.Provider.BaseURL)
+	}
+	if cfg.Provider.Model != "llama3.1" {
+		t.Errorf("model = %q, want 'llama3.1'", cfg.Provider.Model)
+	}
+}
+
+func TestLoad_ProviderPreset_OverrideModel(t *testing.T) {
+	dir := t.TempDir()
+	configContent := `provider:
+  name: openai
+  api_key: test-key
+  model: gpt-4o
+`
+	os.WriteFile(filepath.Join(dir, ".larasense-limbo.yml"), []byte(configContent), 0644)
+
+	origDir, _ := os.Getwd()
+	os.Chdir(dir)
+	defer os.Chdir(origDir)
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+	if cfg.Provider.Model != "gpt-4o" {
+		t.Errorf("model = %q, want user override 'gpt-4o'", cfg.Provider.Model)
+	}
+}
+
+func TestLoad_ProviderPreset_Unknown(t *testing.T) {
+	dir := t.TempDir()
+	configContent := `provider:
+  name: nonexistent
+  api_key: test-key
+`
+	os.WriteFile(filepath.Join(dir, ".larasense-limbo.yml"), []byte(configContent), 0644)
+
+	origDir, _ := os.Getwd()
+	os.Chdir(dir)
+	defer os.Chdir(origDir)
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("expected error for unknown provider name")
+	}
+	if !contains(err.Error(), "unknown provider") {
+		t.Errorf("error should mention 'unknown provider', got: %s", err.Error())
+	}
+}
+
 func contains(s, substr string) bool {
 	return len(s) >= len(substr) && searchStr(s, substr)
 }

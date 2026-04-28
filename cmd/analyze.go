@@ -4,20 +4,25 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
+	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/Mattel-Limbo/larasense-limbo/internal/config"
+	gh "github.com/Mattel-Limbo/larasense-limbo/internal/github"
 	"github.com/Mattel-Limbo/larasense-limbo/internal/output"
 	"github.com/Mattel-Limbo/larasense-limbo/internal/reviewer"
 )
 
 var (
-	flagBase    string
-	flagHead    string
-	flagJSON    bool
-	flagFormat  string
-	flagVerbose bool
+	flagBase     string
+	flagHead     string
+	flagJSON     bool
+	flagFormat   string
+	flagVerbose  bool
+	flagNoCache  bool
+	flagGitHubPR string
 )
 
 var analyzeCmd = &cobra.Command{
@@ -37,6 +42,8 @@ func init() {
 	analyzeCmd.Flags().BoolVar(&flagJSON, "json", false, "Output results as JSON (shorthand for --format json)")
 	analyzeCmd.Flags().StringVar(&flagFormat, "format", "human", "Output format: human, json, github")
 	analyzeCmd.Flags().BoolVar(&flagVerbose, "verbose", false, "Show detailed request/response logs for debugging")
+	analyzeCmd.Flags().BoolVar(&flagNoCache, "no-cache", false, "Skip cache and re-review all files")
+	analyzeCmd.Flags().StringVar(&flagGitHubPR, "github-pr", "", "Post results as PR comment (format: owner/repo#number)")
 
 	rootCmd.AddCommand(analyzeCmd)
 }
@@ -52,7 +59,7 @@ func runAnalyze(cmd *cobra.Command, args []string) error {
 	log.Printf("Comparing %s...%s", flagBase, flagHead)
 
 	// Run the review pipeline
-	rev := reviewer.New(cfg, flagVerbose)
+	rev := reviewer.New(cfg, flagVerbose, flagNoCache)
 	result, err := rev.Run(flagBase, flagHead)
 	if err != nil {
 		return fmt.Errorf("review failed: %w", err)
@@ -78,6 +85,13 @@ func runAnalyze(cmd *cobra.Command, args []string) error {
 		fmt.Fprint(os.Stdout, output.FormatHuman(result))
 	}
 
+	// Post to GitHub PR if requested
+	if flagGitHubPR != "" {
+		if err := postToGitHubPR(flagGitHubPR, result); err != nil {
+			log.Printf("Warning: failed to post GitHub PR comment: %v", err)
+		}
+	}
+
 	// Exit with non-zero if high-severity issues found
 	for _, issue := range result.Issues {
 		if issue.Severity == "high" {
@@ -85,5 +99,55 @@ func runAnalyze(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	return nil
+}
+
+// postToGitHubPR posts review results as a comment on a GitHub pull request.
+// prRef format: "owner/repo#number"
+func postToGitHubPR(prRef string, result *reviewer.Result) error {
+	// Parse "owner/repo#number"
+	parts := strings.SplitN(prRef, "#", 2)
+	if len(parts) != 2 {
+		return fmt.Errorf("invalid --github-pr format %q (expected: owner/repo#number)", prRef)
+	}
+
+	repoParts := strings.SplitN(parts[0], "/", 2)
+	if len(repoParts) != 2 {
+		return fmt.Errorf("invalid --github-pr format %q (expected: owner/repo#number)", prRef)
+	}
+
+	prNumber, err := strconv.Atoi(parts[1])
+	if err != nil {
+		return fmt.Errorf("invalid PR number %q: %w", parts[1], err)
+	}
+
+	owner := repoParts[0]
+	repo := repoParts[1]
+
+	// Get GitHub token from environment
+	token := os.Getenv("GITHUB_TOKEN")
+	if token == "" {
+		return fmt.Errorf("GITHUB_TOKEN environment variable is required for --github-pr")
+	}
+
+	// Convert reviewer issues to github issues
+	var ghIssues []gh.Issue
+	for _, issue := range result.Issues {
+		ghIssues = append(ghIssues, gh.Issue{
+			Title:       issue.Title,
+			Description: issue.Description,
+			File:        issue.File,
+			Line:        issue.Line,
+			Severity:    issue.Severity,
+			Suggestion:  issue.Suggestion,
+		})
+	}
+
+	client := gh.NewClient(token)
+	if err := client.PostReviewComment(owner, repo, prNumber, ghIssues, result.Summary); err != nil {
+		return err
+	}
+
+	log.Printf("Posted review comment to %s PR #%d", parts[0], prNumber)
 	return nil
 }

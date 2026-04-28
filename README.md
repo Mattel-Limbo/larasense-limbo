@@ -127,6 +127,9 @@ larasense-limbo analyze --base main --head HEAD --json
 | `--head` | string | `HEAD` | Head ref for diff comparison |
 | `--json` | bool | `false` | Output results as JSON instead of human-readable format |
 | `--verbose` | bool | `false` | Show detailed AI request/response logs (URL, body, timing, status) |
+| `--no-cache` | bool | `false` | Skip cache and re-review all files |
+| `--format` | string | `human` | Output format: `human`, `json`, `github` |
+| `--github-pr` | string | | Post results as PR comment (format: `owner/repo#number`) |
 
 ### Output Examples
 
@@ -262,14 +265,33 @@ The `api_key` field also supports `${VAR}` syntax for inline env var expansion (
 
 ### Supported AI Providers
 
-Any OpenAI-compatible API works. The tool sends requests to `{base_url}/v1/chat/completions` (default) or `{base_url}/v1/responses` and parses responses in these formats:
+Use `provider.name` for quick setup with built-in presets, or set `base_url` manually for any OpenAI-compatible API:
 
-| Provider | `base_url` | Notes |
-|----------|-----------|-------|
-| OpenAI | `https://api.openai.com` | Responses API and Chat Completions |
-| Azure OpenAI | `https://your-resource.openai.azure.com` | With compatible endpoint |
-| OpenRouter | `https://openrouter.ai/api` | Multi-model gateway |
-| Local (Ollama, LM Studio) | `http://localhost:11434` | Self-hosted models |
+```yaml
+# Quick setup with preset (auto-fills base_url, model, endpoint)
+provider:
+  name: openai        # or: anthropic, gemini, ollama, openrouter
+  api_key: ${AI_API_KEY}
+
+# Or manual setup for any provider
+provider:
+  base_url: http://localhost:1430
+  api_key: ${AI_API_KEY}
+  model: claude-sonnet-4.5
+  endpoint: chat
+```
+
+**Available presets:**
+
+| Preset | Base URL | Default Model | API Key Required |
+|--------|----------|---------------|---|
+| `openai` | `https://api.openai.com` | `gpt-4.1` | Yes |
+| `anthropic` | `https://api.anthropic.com` | `claude-sonnet-4-20250514` | Yes |
+| `gemini` | `https://generativelanguage.googleapis.com/v1beta/openai` | `gemini-2.5-flash` | Yes |
+| `ollama` | `http://localhost:11434` | `llama3.1` | No |
+| `openrouter` | `https://openrouter.ai/api` | `openai/gpt-4.1` | Yes |
+
+You can override any preset field — e.g., `name: openai` with `model: gpt-4o` uses OpenAI's URL but a different model.
 
 ### Custom Prompt
 
@@ -292,6 +314,31 @@ custom_prompt: "This project uses Laravel 11. Check for deprecated features from
 # Stricter review
 custom_prompt: "Be extra strict. Report any method longer than 20 lines as a bad practice."
 ```
+
+### Cache
+
+Larasense-limbo caches review results per file using SHA-256 hashes. On subsequent runs, unchanged files are skipped — saving API calls and time.
+
+```bash
+# Normal run (uses cache)
+larasense-limbo analyze --base main
+
+# Force re-review all files
+larasense-limbo analyze --base main --no-cache
+```
+
+Cache is stored in `.larasense-limbo-cache.json` (auto-added to `.gitignore`).
+
+### GitHub PR Comments
+
+Post review results directly as a comment on a GitHub pull request:
+
+```bash
+export GITHUB_TOKEN=ghp_your_token
+larasense-limbo analyze --base main --github-pr Mattel-Limbo/larasense-limbo#42
+```
+
+This posts a formatted markdown comment on PR #42 with all issues grouped by file.
 
 ## Laravel File Classification
 

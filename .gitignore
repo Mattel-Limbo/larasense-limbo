@@ -15,5 +15,8 @@ Thumbs.db
 # Go
 vendor/
 
+# Cache
+.larasense-limbo-cache.json
+
 # Config with secrets (keep the template)
 # .larasense-limbo.yml  ← tracked as example

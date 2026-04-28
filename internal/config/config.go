@@ -17,10 +17,47 @@ type Config struct {
 
 // ProviderConfig holds AI provider settings.
 type ProviderConfig struct {
+	Name     string `mapstructure:"name"`     // Provider preset: "openai", "anthropic", "gemini", "ollama", or empty for custom
 	BaseURL  string `mapstructure:"base_url"`
 	APIKey   string `mapstructure:"api_key"`
 	Model    string `mapstructure:"model"`
 	Endpoint string `mapstructure:"endpoint"` // "chat" or "responses" (default: "chat")
+}
+
+// providerPreset holds default settings for known AI providers.
+type providerPreset struct {
+	BaseURL  string
+	Model    string
+	Endpoint string
+}
+
+// providerPresets maps provider names to their default configurations.
+var providerPresets = map[string]providerPreset{
+	"openai": {
+		BaseURL:  "https://api.openai.com",
+		Model:    "gpt-4.1",
+		Endpoint: "chat",
+	},
+	"anthropic": {
+		BaseURL:  "https://api.anthropic.com",
+		Model:    "claude-sonnet-4-20250514",
+		Endpoint: "chat",
+	},
+	"gemini": {
+		BaseURL:  "https://generativelanguage.googleapis.com/v1beta/openai",
+		Model:    "gemini-2.5-flash",
+		Endpoint: "chat",
+	},
+	"ollama": {
+		BaseURL:  "http://localhost:11434",
+		Model:    "llama3.1",
+		Endpoint: "chat",
+	},
+	"openrouter": {
+		BaseURL:  "https://openrouter.ai/api",
+		Model:    "openai/gpt-4.1",
+		Endpoint: "chat",
+	},
 }
 
 // ReviewConfig holds review behavior settings.
@@ -99,12 +136,32 @@ func Load() (*Config, error) {
 	// Expand environment variables in api_key (supports ${VAR} syntax)
 	cfg.Provider.APIKey = expandEnvVars(cfg.Provider.APIKey)
 
+	// Apply provider preset defaults (only fills empty fields)
+	if cfg.Provider.Name != "" {
+		if preset, ok := providerPresets[strings.ToLower(cfg.Provider.Name)]; ok {
+			if cfg.Provider.BaseURL == "" {
+				cfg.Provider.BaseURL = preset.BaseURL
+			}
+			if cfg.Provider.Model == "" || cfg.Provider.Model == defaults.Provider.Model {
+				cfg.Provider.Model = preset.Model
+			}
+			if cfg.Provider.Endpoint == "" || cfg.Provider.Endpoint == defaults.Provider.Endpoint {
+				cfg.Provider.Endpoint = preset.Endpoint
+			}
+		} else {
+			return nil, fmt.Errorf("unknown provider name %q (available: openai, anthropic, gemini, ollama, openrouter)", cfg.Provider.Name)
+		}
+	}
+
 	// Validate required fields
 	if cfg.Provider.BaseURL == "" {
 		return nil, fmt.Errorf("provider.base_url is required (set in config or LARASENSE_LIMBO_PROVIDER_BASE_URL env)")
 	}
 	if cfg.Provider.APIKey == "" {
-		return nil, fmt.Errorf("provider.api_key is required (set in config or LARASENSE_LIMBO_PROVIDER_API_KEY env)")
+		// Ollama doesn't require API key
+		if strings.ToLower(cfg.Provider.Name) != "ollama" {
+			return nil, fmt.Errorf("provider.api_key is required (set in config or LARASENSE_LIMBO_PROVIDER_API_KEY env)")
+		}
 	}
 
 	return cfg, nil
