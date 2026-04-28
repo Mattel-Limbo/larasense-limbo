@@ -18,5 +18,5 @@ vendor/
 # Cache
 .larasense-limbo-cache.json
 
-# Config with secrets (keep the template)
-# .larasense-limbo.yml  ← tracked as example
+# Config (contains secrets — use .larasense-limbo.yml.example as template)
+.larasense-limbo.yml
