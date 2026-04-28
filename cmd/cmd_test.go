@@ -175,6 +175,14 @@ func TestAnalyzeCommand_Flags(t *testing.T) {
 	if verboseFlag.DefValue != "false" {
 		t.Errorf("--verbose default = %q, want 'false'", verboseFlag.DefValue)
 	}
+
+	formatFlag := f.Lookup("format")
+	if formatFlag == nil {
+		t.Fatal("--format flag not registered")
+	}
+	if formatFlag.DefValue != "human" {
+		t.Errorf("--format default = %q, want 'human'", formatFlag.DefValue)
+	}
 }
 
 func TestRootCommand_HasSubcommands(t *testing.T) {

@@ -1,0 +1,8 @@
+larasense-limbo
+larasense-limbo.exe
+.git
+.github
+.idea
+.vscode
+*.md
+!README.md

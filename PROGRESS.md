@@ -54,8 +54,8 @@ Status tracking untuk fitur-fitur larasense-limbo.
 | # | Fitur | Status | Catatan |
 |---|-------|--------|---------|
 | 29 | GitHub Actions workflow | ✅ Done | CI: test + build + lint on push/PR, matrix: 3 OS × 3 Go versions |
-| 30 | Release workflow | 📋 Planned | GoReleaser, multi-platform binaries |
-| 31 | Dockerfile | 📋 Planned | Container image untuk CI |
+| 30 | Release workflow | ✅ Done | GoReleaser, multi-platform binaries (linux/darwin/windows × amd64/arm64), trigger on tag `v*` |
+| 31 | Dockerfile | ✅ Done | Multi-stage build (golang:1.23-alpine → alpine:3.20), includes git |
 | 32 | Makefile | ✅ Done | `make build`, `make test`, `make vet`, `make lint`, `make install`, `make clean`, `make run` |
 
 ## Planned Features
@@ -65,7 +65,7 @@ Status tracking untuk fitur-fitur larasense-limbo.
 | 33 | Multiple AI provider support | 📋 Planned | Anthropic, Gemini, Ollama endpoint configs |
 | 34 | Custom prompt override | ✅ Done | `review.custom_prompt` di config, di-append ke system prompt |
 | 35 | GitHub PR comment integration | 📋 Planned | Post review sebagai PR comment via GitHub API |
-| 36 | Inline annotation output | 📋 Planned | Format output untuk GitHub Actions annotations |
+| 36 | Inline annotation output | ✅ Done | `--format github`, high→`::error`, medium→`::warning`, low→`::notice` |
 | 37 | Cache layer | 📋 Planned | Skip re-review file yang tidak berubah |
 | 38 | Verbose/debug mode | ✅ Done | `--verbose` flag, log request/response body, timing, parsed issue count |
 | 39 | Config init command | ✅ Done | `larasense-limbo init` + `--force` flag, generate config template |
@@ -95,7 +95,7 @@ Status tracking untuk fitur-fitur larasense-limbo.
 | Core (MVP) | 15 | 0 | 0 |
 | Reliability | 5 | 0 | 0 |
 | Testing | 6 | 2 | 0 |
-| CI/CD | 2 | 2 | 0 |
-| Planned Features | 4 | 4 | 0 |
+| CI/CD | 4 | 0 | 0 |
+| Planned Features | 5 | 3 | 0 |
 | Future Ideas | 0 | 0 | 10 |
-| **Total** | **32** | **8** | **10** |
+| **Total** | **35** | **5** | **10** |

@@ -171,6 +171,57 @@ func TestFormatHuman_EmptyFile(t *testing.T) {
 	}
 }
 
+func TestFormatGitHubAnnotations_WithIssues(t *testing.T) {
+	result := &reviewer.Result{
+		Issues: []reviewer.Issue{
+			{
+				Title:       "SQL Injection",
+				Description: "Raw query without binding",
+				File:        "app/Http/Controllers/UserController.php",
+				Line:        53,
+				Severity:    "high",
+			},
+			{
+				Title:       "Missing Validation",
+				Description: "No input validation",
+				File:        "app/Http/Controllers/UserController.php",
+				Line:        21,
+				Severity:    "medium",
+			},
+			{
+				Title:       "Naming Convention",
+				Description: "Method name not camelCase",
+				File:        "app/Models/User.php",
+				Line:        10,
+				Severity:    "low",
+			},
+		},
+	}
+
+	out := FormatGitHubAnnotations(result)
+
+	// High → ::error
+	if !strings.Contains(out, "::error file=app/Http/Controllers/UserController.php,line=53::SQL Injection:") {
+		t.Errorf("high severity should produce ::error, got:\n%s", out)
+	}
+	// Medium → ::warning
+	if !strings.Contains(out, "::warning file=app/Http/Controllers/UserController.php,line=21::Missing Validation:") {
+		t.Errorf("medium severity should produce ::warning, got:\n%s", out)
+	}
+	// Low → ::notice
+	if !strings.Contains(out, "::notice file=app/Models/User.php,line=10::Naming Convention:") {
+		t.Errorf("low severity should produce ::notice, got:\n%s", out)
+	}
+}
+
+func TestFormatGitHubAnnotations_NoIssues(t *testing.T) {
+	result := &reviewer.Result{Issues: []reviewer.Issue{}}
+	out := FormatGitHubAnnotations(result)
+	if out != "" {
+		t.Errorf("no issues should produce empty output, got: %q", out)
+	}
+}
+
 func TestGroupByFile(t *testing.T) {
 	issues := []reviewer.Issue{
 		{File: "a.php", Title: "issue1"},

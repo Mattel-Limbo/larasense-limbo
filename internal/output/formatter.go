@@ -66,6 +66,36 @@ func FormatHuman(result *reviewer.Result) string {
 	return sb.String()
 }
 
+// FormatGitHubAnnotations returns issues as GitHub Actions workflow commands.
+// Format: ::warning file={file},line={line}::{title}: {description}
+// See: https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/workflow-commands-for-github-actions
+func FormatGitHubAnnotations(result *reviewer.Result) string {
+	var sb strings.Builder
+
+	for _, issue := range result.Issues {
+		level := "warning"
+		switch strings.ToLower(issue.Severity) {
+		case "high":
+			level = "error"
+		case "low":
+			level = "notice"
+		}
+
+		file := issue.File
+		if file == "" {
+			file = "(unknown)"
+		}
+
+		if issue.Line > 0 {
+			fmt.Fprintf(&sb, "::%s file=%s,line=%d::%s: %s\n", level, file, issue.Line, issue.Title, issue.Description)
+		} else {
+			fmt.Fprintf(&sb, "::%s file=%s::%s: %s\n", level, file, issue.Title, issue.Description)
+		}
+	}
+
+	return sb.String()
+}
+
 // groupByFile groups issues by their file path.
 func groupByFile(issues []reviewer.Issue) map[string][]reviewer.Issue {
 	grouped := make(map[string][]reviewer.Issue)

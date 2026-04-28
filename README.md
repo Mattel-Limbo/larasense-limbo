@@ -320,7 +320,9 @@ The tool automatically classifies changed files into 18 Laravel component types 
 
 ## CI/CD Integration
 
-### GitHub Actions
+### GitHub Actions (with inline annotations)
+
+Use `--format github` to get inline annotations directly on PR files:
 
 ```yaml
 name: Laravel Code Review
@@ -335,15 +337,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Full history for git diff
+          fetch-depth: 0
 
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.21'
+          go-version: '1.23'
 
       - name: Install larasense-limbo
-        run: |
-          go install github.com/Mattel-Limbo/larasense-limbo@latest
+        run: go install github.com/Mattel-Limbo/larasense-limbo@latest
 
       - name: Run AI Code Review
         env:
@@ -352,8 +353,37 @@ jobs:
           larasense-limbo analyze \
             --base origin/${{ github.base_ref }} \
             --head ${{ github.sha }} \
-            --json
+            --format github
 ```
+
+This produces inline annotations on the PR:
+- `high` severity → `::error` (red)
+- `medium` severity → `::warning` (yellow)
+- `low` severity → `::notice` (blue)
+
+### Docker
+
+```bash
+# Build
+docker build -t larasense-limbo .
+
+# Run (mount your Laravel project)
+docker run --rm -v /path/to/laravel:/repo \
+  -e AI_API_KEY=your-key \
+  larasense-limbo analyze --base main
+```
+
+### Release
+
+Releases are automated via GoReleaser on tag push:
+
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+# → GitHub Actions builds binaries for linux/darwin/windows × amd64/arm64
+```
+
+Download pre-built binaries from [Releases](https://github.com/Mattel-Limbo/larasense-limbo/releases).
 
 ### Exit Codes
 
@@ -379,8 +409,14 @@ larasense-limbo/
 │   ├── context/builder.go           # Laravel-aware context builder
 │   ├── ai/client.go                 # AI provider HTTP client
 │   ├── reviewer/reviewer.go         # Pipeline orchestrator
-│   └── output/formatter.go          # Human + JSON output
-└── .larasense-limbo.yml             # Example config
+│   └── output/formatter.go          # Human + JSON + GitHub annotations output
+├── .larasense-limbo.yml             # Example config
+├── Dockerfile                       # Multi-stage container build
+├── Makefile                         # Build/test/install targets
+├── .goreleaser.yml                  # Release configuration
+└── .github/workflows/
+    ├── ci.yml                       # CI: test + build + lint
+    └── release.yml                  # Release on tag push
 ```
 
 ### Data Flow

@@ -16,6 +16,7 @@ var (
 	flagBase    string
 	flagHead    string
 	flagJSON    bool
+	flagFormat  string
 	flagVerbose bool
 )
 
@@ -33,7 +34,8 @@ directory and uses the configured AI provider to analyze changed files.`,
 func init() {
 	analyzeCmd.Flags().StringVar(&flagBase, "base", "origin/main", "Base ref for diff comparison")
 	analyzeCmd.Flags().StringVar(&flagHead, "head", "HEAD", "Head ref for diff comparison")
-	analyzeCmd.Flags().BoolVar(&flagJSON, "json", false, "Output results as JSON")
+	analyzeCmd.Flags().BoolVar(&flagJSON, "json", false, "Output results as JSON (shorthand for --format json)")
+	analyzeCmd.Flags().StringVar(&flagFormat, "format", "human", "Output format: human, json, github")
 	analyzeCmd.Flags().BoolVar(&flagVerbose, "verbose", false, "Show detailed request/response logs for debugging")
 
 	rootCmd.AddCommand(analyzeCmd)
@@ -56,14 +58,23 @@ func runAnalyze(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("review failed: %w", err)
 	}
 
-	// Output results
+	// Resolve output format (--json is shorthand for --format json)
+	format := flagFormat
 	if flagJSON {
+		format = "json"
+	}
+
+	// Output results
+	switch format {
+	case "json":
 		jsonOut, err := output.FormatJSON(result)
 		if err != nil {
 			return fmt.Errorf("formatting JSON output: %w", err)
 		}
 		fmt.Fprintln(os.Stdout, jsonOut)
-	} else {
+	case "github":
+		fmt.Fprint(os.Stdout, output.FormatGitHubAnnotations(result))
+	default:
 		fmt.Fprint(os.Stdout, output.FormatHuman(result))
 	}
 
