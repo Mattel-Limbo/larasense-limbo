@@ -27,6 +27,7 @@ type ProviderConfig struct {
 type ReviewConfig struct {
 	MaxIssues         int    `mapstructure:"max_issues"`
 	SeverityThreshold string `mapstructure:"severity_threshold"`
+	CustomPrompt      string `mapstructure:"custom_prompt"`
 }
 
 // FilterConfig holds file inclusion/exclusion patterns.

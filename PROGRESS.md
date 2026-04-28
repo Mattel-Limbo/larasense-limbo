@@ -53,17 +53,17 @@ Status tracking untuk fitur-fitur larasense-limbo.
 
 | # | Fitur | Status | Catatan |
 |---|-------|--------|---------|
-| 29 | GitHub Actions workflow | 📋 Planned | Test + build on push/PR |
+| 29 | GitHub Actions workflow | ✅ Done | CI: test + build + lint on push/PR, matrix: 3 OS × 3 Go versions |
 | 30 | Release workflow | 📋 Planned | GoReleaser, multi-platform binaries |
 | 31 | Dockerfile | 📋 Planned | Container image untuk CI |
-| 32 | Makefile | 📋 Planned | `make build`, `make test`, `make lint` |
+| 32 | Makefile | ✅ Done | `make build`, `make test`, `make vet`, `make lint`, `make install`, `make clean`, `make run` |
 
 ## Planned Features
 
 | # | Fitur | Status | Catatan |
 |---|-------|--------|---------|
 | 33 | Multiple AI provider support | 📋 Planned | Anthropic, Gemini, Ollama endpoint configs |
-| 34 | Custom prompt override | 📋 Planned | User-defined prompt via config |
+| 34 | Custom prompt override | ✅ Done | `review.custom_prompt` di config, di-append ke system prompt |
 | 35 | GitHub PR comment integration | 📋 Planned | Post review sebagai PR comment via GitHub API |
 | 36 | Inline annotation output | 📋 Planned | Format output untuk GitHub Actions annotations |
 | 37 | Cache layer | 📋 Planned | Skip re-review file yang tidak berubah |
@@ -95,7 +95,7 @@ Status tracking untuk fitur-fitur larasense-limbo.
 | Core (MVP) | 15 | 0 | 0 |
 | Reliability | 5 | 0 | 0 |
 | Testing | 3 | 5 | 0 |
-| CI/CD | 0 | 4 | 0 |
-| Planned Features | 3 | 5 | 0 |
+| CI/CD | 2 | 2 | 0 |
+| Planned Features | 4 | 4 | 0 |
 | Future Ideas | 0 | 0 | 10 |
-| **Total** | **26** | **14** | **10** |
+| **Total** | **29** | **11** | **10** |

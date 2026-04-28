@@ -233,6 +233,7 @@ provider:
 review:
   max_issues: 5                       # Max issues to return (default: 5)
   severity_threshold: medium          # Minimum severity: low, medium, high (default: medium)
+  # custom_prompt: "Focus on security"  # Additional instructions appended to AI prompt (optional)
 
 # File filtering (glob patterns)
 filters:
@@ -261,7 +262,7 @@ The `api_key` field also supports `${VAR}` syntax for inline env var expansion (
 
 ### Supported AI Providers
 
-Any OpenAI-compatible API works. The tool sends requests to `{base_url}/v1/responses` and parses responses in these formats:
+Any OpenAI-compatible API works. The tool sends requests to `{base_url}/v1/chat/completions` (default) or `{base_url}/v1/responses` and parses responses in these formats:
 
 | Provider | `base_url` | Notes |
 |----------|-----------|-------|
@@ -269,6 +270,28 @@ Any OpenAI-compatible API works. The tool sends requests to `{base_url}/v1/respo
 | Azure OpenAI | `https://your-resource.openai.azure.com` | With compatible endpoint |
 | OpenRouter | `https://openrouter.ai/api` | Multi-model gateway |
 | Local (Ollama, LM Studio) | `http://localhost:11434` | Self-hosted models |
+
+### Custom Prompt
+
+You can add custom instructions that get appended to the built-in AI review prompt:
+
+```yaml
+review:
+  custom_prompt: "Focus only on security vulnerabilities and SQL injection risks. Ignore performance issues."
+```
+
+More examples:
+
+```yaml
+# Only check for N+1 queries
+custom_prompt: "Only report N+1 query problems and missing eager loading."
+
+# Review for a specific Laravel version
+custom_prompt: "This project uses Laravel 11. Check for deprecated features from Laravel 10."
+
+# Stricter review
+custom_prompt: "Be extra strict. Report any method longer than 20 lines as a bad practice."
+```
 
 ## Laravel File Classification
 
@@ -388,21 +411,25 @@ larasense-limbo analyze
 
 ## Development
 
-### Build
+A `Makefile` is provided for common tasks:
+
+```bash
+make build      # Build binary with version info from git
+make test       # Run all tests
+make vet        # Run go vet
+make lint       # Run vet + test
+make clean      # Remove build artifacts
+make install    # Install to $GOPATH/bin
+make run        # Build and run analyze (usage: make run ARGS="--base main")
+make version    # Build and show version
+make help       # Show all targets
+```
+
+Or use Go directly:
 
 ```bash
 go build -o larasense-limbo .
-```
-
-### Test
-
-```bash
 go test ./... -v
-```
-
-### Vet
-
-```bash
 go vet ./...
 ```
 

@@ -90,7 +90,7 @@ func (r *Reviewer) Run(base, head string) (*Result, error) {
 	// Step 5: Send to AI
 	log.Println("Sending to AI provider for analysis...")
 	client := ai.NewClient(&r.cfg.Provider, r.verbose)
-	aiResp, err := client.Analyze(diffText.String(), contextText)
+	aiResp, err := client.Analyze(diffText.String(), contextText, r.cfg.Review.CustomPrompt)
 	if err != nil {
 		return nil, fmt.Errorf("AI analysis: %w", err)
 	}

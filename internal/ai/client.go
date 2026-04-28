@@ -72,8 +72,12 @@ type Issue struct {
 }
 
 // Analyze sends the diff and context to the AI provider and returns structured issues.
-func (c *Client) Analyze(diffText, contextText string) (*Response, error) {
+// customPrompt is appended to the system prompt if non-empty.
+func (c *Client) Analyze(diffText, contextText, customPrompt string) (*Response, error) {
 	systemPrompt := buildPrompt()
+	if customPrompt != "" {
+		systemPrompt += "\n\nAdditional instructions from the user:\n" + customPrompt
+	}
 	userContent := fmt.Sprintf("## File Context\n\n%s\n\n## Git Diff\n\n%s", contextText, diffText)
 
 	var jsonBody []byte

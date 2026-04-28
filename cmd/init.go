@@ -16,6 +16,7 @@ const configTemplate = `provider:
 review:
   max_issues: 5
   severity_threshold: medium
+  # custom_prompt: "Focus only on security issues and SQL injection risks"
 
 filters:
   include:
