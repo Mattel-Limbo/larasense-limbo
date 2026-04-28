@@ -5,11 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strings"
 	"time"
 
-	"github.com/larasense/larasense-limbo/internal/config"
+	"github.com/Mattel-Limbo/larasense-limbo/internal/config"
 )
 
 const (
@@ -22,12 +23,14 @@ const (
 type Client struct {
 	cfg        *config.ProviderConfig
 	httpClient *http.Client
+	verbose    bool
 }
 
 // NewClient creates a new AI provider client.
-func NewClient(cfg *config.ProviderConfig) *Client {
+func NewClient(cfg *config.ProviderConfig, verbose bool) *Client {
 	return &Client{
-		cfg: cfg,
+		cfg:     cfg,
+		verbose: verbose,
 		httpClient: &http.Client{
 			Timeout: defaultTimeout,
 		},
@@ -128,6 +131,12 @@ func (c *Client) doRequest(body []byte) (*Response, error) {
 	}
 	url := strings.TrimRight(c.cfg.BaseURL, "/") + path
 
+	if c.verbose {
+		log.Printf("[VERBOSE] POST %s", url)
+		log.Printf("[VERBOSE] Model: %s", c.cfg.Model)
+		log.Printf("[VERBOSE] Request body (%d bytes):\n%s", len(body), truncate(string(body), 2000))
+	}
+
 	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("creating request: %w", err)
@@ -136,8 +145,14 @@ func (c *Client) doRequest(body []byte) (*Response, error) {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+c.cfg.APIKey)
 
+	start := time.Now()
 	resp, err := c.httpClient.Do(req)
+	elapsed := time.Since(start)
+
 	if err != nil {
+		if c.verbose {
+			log.Printf("[VERBOSE] Request failed after %s: %v", elapsed, err)
+		}
 		return nil, fmt.Errorf("sending request: %w", err)
 	}
 	defer resp.Body.Close()
@@ -145,6 +160,11 @@ func (c *Client) doRequest(body []byte) (*Response, error) {
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("reading response body: %w", err)
+	}
+
+	if c.verbose {
+		log.Printf("[VERBOSE] Response status: %d (%s)", resp.StatusCode, elapsed)
+		log.Printf("[VERBOSE] Response body (%d bytes):\n%s", len(respBody), truncate(string(respBody), 2000))
 	}
 
 	if resp.StatusCode != http.StatusOK {
@@ -157,6 +177,10 @@ func (c *Client) doRequest(body []byte) (*Response, error) {
 	aiResp, err := extractContent(respBody)
 	if err != nil {
 		return nil, fmt.Errorf("parsing AI response: %w", err)
+	}
+
+	if c.verbose {
+		log.Printf("[VERBOSE] Parsed %d issue(s) from response", len(aiResp.Issues))
 	}
 
 	return aiResp, nil

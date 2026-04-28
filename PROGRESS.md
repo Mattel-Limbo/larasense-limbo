@@ -17,7 +17,7 @@ Status tracking untuk fitur-fitur larasense-limbo.
 | 5 | Laravel file filtering | ✅ Done | `.php` + `.blade.php`, glob include/exclude |
 | 6 | Laravel file classification | ✅ Done | 18 component types (Controller, Model, dll.) |
 | 7 | Context builder | ✅ Done | Hints per tipe file, surrounding ±20 lines |
-| 8 | AI provider client | ✅ Done | HTTP POST ke `/v1/responses`, Bearer auth |
+| 8 | AI provider client | ✅ Done | HTTP POST ke `/v1/chat/completions` atau `/v1/responses`, Bearer auth |
 | 9 | AI prompt (Laravel reviewer) | ✅ Done | Strict JSON output, fokus performance/security/practices/conventions |
 | 10 | Response parser (multi-format) | ✅ Done | OpenAI Responses API, Chat Completions, direct JSON, markdown fence stripping |
 | 11 | Human-readable output | ✅ Done | Grouped by file, severity icons, suggestions |
@@ -67,9 +67,9 @@ Status tracking untuk fitur-fitur larasense-limbo.
 | 35 | GitHub PR comment integration | 📋 Planned | Post review sebagai PR comment via GitHub API |
 | 36 | Inline annotation output | 📋 Planned | Format output untuk GitHub Actions annotations |
 | 37 | Cache layer | 📋 Planned | Skip re-review file yang tidak berubah |
-| 38 | Verbose/debug mode | 📋 Planned | `--verbose` flag untuk troubleshooting |
-| 39 | Config init command | 📋 Planned | `larasense-limbo init` generate config template |
-| 40 | Version command | 📋 Planned | `larasense-limbo version` dengan build info |
+| 38 | Verbose/debug mode | ✅ Done | `--verbose` flag, log request/response body, timing, parsed issue count |
+| 39 | Config init command | ✅ Done | `larasense-limbo init` + `--force` flag, generate config template |
+| 40 | Version command | ✅ Done | `larasense-limbo version`, build info via `-ldflags` |
 
 ## Future Ideas
 
@@ -96,6 +96,6 @@ Status tracking untuk fitur-fitur larasense-limbo.
 | Reliability | 5 | 0 | 0 |
 | Testing | 3 | 5 | 0 |
 | CI/CD | 0 | 4 | 0 |
-| Planned Features | 0 | 8 | 0 |
+| Planned Features | 3 | 5 | 0 |
 | Future Ideas | 0 | 0 | 10 |
-| **Total** | **23** | **17** | **10** |
+| **Total** | **26** | **14** | **10** |

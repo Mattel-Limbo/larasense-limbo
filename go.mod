@@ -1,4 +1,4 @@
-module github.com/larasense/larasense-limbo
+module github.com/Mattel-Limbo/larasense-limbo
 
 go 1.25.3
 

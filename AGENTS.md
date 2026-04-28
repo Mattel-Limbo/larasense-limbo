@@ -1,7 +1,7 @@
 # PROJECT KNOWLEDGE BASE
 
 **Generated:** 2025-04-28
-**Module:** `github.com/larasense/larasense-limbo`
+**Module:** `github.com/Mattel-Limbo/larasense-limbo`
 
 ## OVERVIEW
 

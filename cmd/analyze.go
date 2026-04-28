@@ -7,15 +7,16 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/larasense/larasense-limbo/internal/config"
-	"github.com/larasense/larasense-limbo/internal/output"
-	"github.com/larasense/larasense-limbo/internal/reviewer"
+	"github.com/Mattel-Limbo/larasense-limbo/internal/config"
+	"github.com/Mattel-Limbo/larasense-limbo/internal/output"
+	"github.com/Mattel-Limbo/larasense-limbo/internal/reviewer"
 )
 
 var (
-	flagBase   string
-	flagHead   string
-	flagJSON   bool
+	flagBase    string
+	flagHead    string
+	flagJSON    bool
+	flagVerbose bool
 )
 
 var analyzeCmd = &cobra.Command{
@@ -33,6 +34,7 @@ func init() {
 	analyzeCmd.Flags().StringVar(&flagBase, "base", "origin/main", "Base ref for diff comparison")
 	analyzeCmd.Flags().StringVar(&flagHead, "head", "HEAD", "Head ref for diff comparison")
 	analyzeCmd.Flags().BoolVar(&flagJSON, "json", false, "Output results as JSON")
+	analyzeCmd.Flags().BoolVar(&flagVerbose, "verbose", false, "Show detailed request/response logs for debugging")
 
 	rootCmd.AddCommand(analyzeCmd)
 }
@@ -48,7 +50,7 @@ func runAnalyze(cmd *cobra.Command, args []string) error {
 	log.Printf("Comparing %s...%s", flagBase, flagHead)
 
 	// Run the review pipeline
-	rev := reviewer.New(cfg)
+	rev := reviewer.New(cfg, flagVerbose)
 	result, err := rev.Run(flagBase, flagHead)
 	if err != nil {
 		return fmt.Errorf("review failed: %w", err)

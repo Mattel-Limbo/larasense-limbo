@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	"github.com/larasense/larasense-limbo/cmd"
+	"github.com/Mattel-Limbo/larasense-limbo/cmd"
 )
 
 func main() {

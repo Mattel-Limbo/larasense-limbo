@@ -34,7 +34,7 @@ AI-powered code review CLI for Laravel projects. Analyzes git diffs and detects 
 ### From Source
 
 ```bash
-git clone https://github.com/larasense/larasense-limbo.git
+git clone https://github.com/Mattel-Limbo/larasense-limbo.git
 cd larasense-limbo
 go build -o larasense-limbo .
 ```
@@ -57,13 +57,14 @@ larasense-limbo --help
 
 ## Quick Start
 
-1. **Create a config file** in your Laravel project root:
+1. **Generate a config file** in your Laravel project root:
 
 ```bash
 cd /path/to/your/laravel-project
+larasense-limbo init
 ```
 
-Create `.larasense-limbo.yml`:
+This creates `.larasense-limbo.yml` with sensible defaults. Edit it:
 
 ```yaml
 provider:
@@ -111,6 +112,9 @@ larasense-limbo analyze --base origin/develop --head feature/user-auth
 # Output as JSON (for CI/CD pipelines)
 larasense-limbo analyze --json
 
+# Show detailed request/response logs for debugging
+larasense-limbo analyze --base main --verbose
+
 # Combine flags
 larasense-limbo analyze --base main --head HEAD --json
 ```
@@ -122,6 +126,7 @@ larasense-limbo analyze --base main --head HEAD --json
 | `--base` | string | `origin/main` | Base ref for diff comparison |
 | `--head` | string | `HEAD` | Head ref for diff comparison |
 | `--json` | bool | `false` | Output results as JSON instead of human-readable format |
+| `--verbose` | bool | `false` | Show detailed AI request/response logs (URL, body, timing, status) |
 
 ### Output Examples
 
@@ -167,6 +172,48 @@ larasense-limbo analyze --base main --head HEAD --json
   "files_analyzed": 3,
   "summary": "Reviewed 3 file(s). Found 1 issue(s): 1 high, 0 medium, 0 low."
 }
+```
+
+## Other Commands
+
+### Init
+
+Generate a default `.larasense-limbo.yml` config file in the current directory:
+
+```bash
+# Generate config (fails if file already exists)
+larasense-limbo init
+
+# Overwrite existing config
+larasense-limbo init --force
+```
+
+### Version
+
+Print version and build information:
+
+```bash
+larasense-limbo version
+```
+
+Output:
+
+```
+larasense-limbo 1.0.0
+  commit:  abc1234
+  built:   2026-04-28
+  go:      go1.21.0
+  os/arch: linux/amd64
+```
+
+Version info is injected at build time via `-ldflags`:
+
+```bash
+go build -ldflags "\
+  -X github.com/Mattel-Limbo/larasense-limbo/cmd.Version=1.0.0 \
+  -X github.com/Mattel-Limbo/larasense-limbo/cmd.Commit=$(git rev-parse --short HEAD) \
+  -X github.com/Mattel-Limbo/larasense-limbo/cmd.BuildDate=$(date -u +%Y-%m-%d)" \
+  -o larasense-limbo .
 ```
 
 ## Configuration
@@ -273,7 +320,7 @@ jobs:
 
       - name: Install larasense-limbo
         run: |
-          go install github.com/larasense/larasense-limbo@latest
+          go install github.com/Mattel-Limbo/larasense-limbo@latest
 
       - name: Run AI Code Review
         env:
@@ -299,7 +346,9 @@ larasense-limbo/
 ├── main.go                          # Entry point
 ├── cmd/
 │   ├── root.go                      # Root CLI command
-│   └── analyze.go                   # analyze subcommand + flags
+│   ├── analyze.go                   # analyze subcommand + flags
+│   ├── init.go                      # init subcommand (config generator)
+│   └── version.go                   # version subcommand (build info)
 ├── internal/
 │   ├── config/config.go             # Viper YAML + env config loader
 │   ├── git/git.go                   # Git operations (exec)

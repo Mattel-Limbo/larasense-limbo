@@ -5,11 +5,11 @@ import (
 	"log"
 	"strings"
 
-	"github.com/larasense/larasense-limbo/internal/ai"
-	"github.com/larasense/larasense-limbo/internal/config"
-	"github.com/larasense/larasense-limbo/internal/context"
-	"github.com/larasense/larasense-limbo/internal/diff"
-	"github.com/larasense/larasense-limbo/internal/git"
+	"github.com/Mattel-Limbo/larasense-limbo/internal/ai"
+	"github.com/Mattel-Limbo/larasense-limbo/internal/config"
+	"github.com/Mattel-Limbo/larasense-limbo/internal/context"
+	"github.com/Mattel-Limbo/larasense-limbo/internal/diff"
+	"github.com/Mattel-Limbo/larasense-limbo/internal/git"
 )
 
 // Issue is a re-export of ai.Issue for use by consumers of this package.
@@ -24,12 +24,13 @@ type Result struct {
 
 // Reviewer orchestrates the full code review pipeline.
 type Reviewer struct {
-	cfg *config.Config
+	cfg     *config.Config
+	verbose bool
 }
 
 // New creates a new Reviewer.
-func New(cfg *config.Config) *Reviewer {
-	return &Reviewer{cfg: cfg}
+func New(cfg *config.Config, verbose bool) *Reviewer {
+	return &Reviewer{cfg: cfg, verbose: verbose}
 }
 
 // Run executes the full review pipeline: diff → parse → context → AI → result.
@@ -88,7 +89,7 @@ func (r *Reviewer) Run(base, head string) (*Result, error) {
 
 	// Step 5: Send to AI
 	log.Println("Sending to AI provider for analysis...")
-	client := ai.NewClient(&r.cfg.Provider)
+	client := ai.NewClient(&r.cfg.Provider, r.verbose)
 	aiResp, err := client.Analyze(diffText.String(), contextText)
 	if err != nil {
 		return nil, fmt.Errorf("AI analysis: %w", err)

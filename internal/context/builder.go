@@ -5,9 +5,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/larasense/larasense-limbo/internal/config"
-	"github.com/larasense/larasense-limbo/internal/diff"
-	"github.com/larasense/larasense-limbo/internal/git"
+	"github.com/Mattel-Limbo/larasense-limbo/internal/config"
+	"github.com/Mattel-Limbo/larasense-limbo/internal/diff"
+	"github.com/Mattel-Limbo/larasense-limbo/internal/git"
 )
 
 // FileContext holds the analysis context for a single changed file.

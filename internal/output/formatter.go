@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/larasense/larasense-limbo/internal/reviewer"
+	"github.com/Mattel-Limbo/larasense-limbo/internal/reviewer"
 )
 
 // FormatJSON returns the review result as formatted JSON.
