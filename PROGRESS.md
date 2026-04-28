@@ -45,9 +45,9 @@ Status tracking untuk fitur-fitur larasense-limbo.
 | 23 | AI response parser tests | ✅ Done | Direct JSON, markdown wrapped, surrounding text, Chat Completions, Responses API |
 | 24 | Git module tests | 📋 Planned | Mock git commands |
 | 25 | Reviewer integration tests | 📋 Planned | End-to-end pipeline test |
-| 26 | Output formatter tests | 📋 Planned | Human + JSON format verification |
-| 27 | Config loader tests | 📋 Planned | YAML parsing, env override, validation |
-| 28 | CLI command tests | 📋 Planned | Flag parsing, error handling |
+| 26 | Output formatter tests | ✅ Done | FormatJSON, FormatHuman, groupByFile, severityIcon, empty/no-issues cases |
+| 27 | Config loader tests | ✅ Done | DefaultConfig, Load (valid/missing/defaults), env var expansion, validation |
+| 28 | CLI command tests | ✅ Done | version output, init create/refuse/force, analyze flags, root subcommands |
 
 ## CI/CD
 
@@ -94,8 +94,8 @@ Status tracking untuk fitur-fitur larasense-limbo.
 |----------|------|---------|--------|
 | Core (MVP) | 15 | 0 | 0 |
 | Reliability | 5 | 0 | 0 |
-| Testing | 3 | 5 | 0 |
+| Testing | 6 | 2 | 0 |
 | CI/CD | 2 | 2 | 0 |
 | Planned Features | 4 | 4 | 0 |
 | Future Ideas | 0 | 0 | 10 |
-| **Total** | **29** | **11** | **10** |
+| **Total** | **32** | **8** | **10** |
