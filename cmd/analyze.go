@@ -1,0 +1,76 @@
+package cmd
+
+import (
+	"fmt"
+	"log"
+	"os"
+
+	"github.com/spf13/cobra"
+
+	"github.com/larasense/larasense-limbo/internal/config"
+	"github.com/larasense/larasense-limbo/internal/output"
+	"github.com/larasense/larasense-limbo/internal/reviewer"
+)
+
+var (
+	flagBase   string
+	flagHead   string
+	flagJSON   bool
+)
+
+var analyzeCmd = &cobra.Command{
+	Use:   "analyze",
+	Short: "Analyze git diff for Laravel best practices",
+	Long: `Analyze the git diff between two refs and send it to an AI provider
+for code review focused on Laravel best practices.
+
+The command reads the .larasense-limbo.yml config file from the current
+directory and uses the configured AI provider to analyze changed files.`,
+	RunE: runAnalyze,
+}
+
+func init() {
+	analyzeCmd.Flags().StringVar(&flagBase, "base", "origin/main", "Base ref for diff comparison")
+	analyzeCmd.Flags().StringVar(&flagHead, "head", "HEAD", "Head ref for diff comparison")
+	analyzeCmd.Flags().BoolVar(&flagJSON, "json", false, "Output results as JSON")
+
+	rootCmd.AddCommand(analyzeCmd)
+}
+
+func runAnalyze(cmd *cobra.Command, args []string) error {
+	// Load configuration
+	cfg, err := config.Load()
+	if err != nil {
+		return fmt.Errorf("loading config: %w", err)
+	}
+
+	log.Printf("Using AI provider: %s (model: %s)", cfg.Provider.BaseURL, cfg.Provider.Model)
+	log.Printf("Comparing %s...%s", flagBase, flagHead)
+
+	// Run the review pipeline
+	rev := reviewer.New(cfg)
+	result, err := rev.Run(flagBase, flagHead)
+	if err != nil {
+		return fmt.Errorf("review failed: %w", err)
+	}
+
+	// Output results
+	if flagJSON {
+		jsonOut, err := output.FormatJSON(result)
+		if err != nil {
+			return fmt.Errorf("formatting JSON output: %w", err)
+		}
+		fmt.Fprintln(os.Stdout, jsonOut)
+	} else {
+		fmt.Fprint(os.Stdout, output.FormatHuman(result))
+	}
+
+	// Exit with non-zero if high-severity issues found
+	for _, issue := range result.Issues {
+		if issue.Severity == "high" {
+			os.Exit(1)
+		}
+	}
+
+	return nil
+}

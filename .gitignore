@@ -1,0 +1,19 @@
+# Binary
+larasense-limbo
+larasense-limbo.exe
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Go
+vendor/
+
+# Config with secrets (keep the template)
+# .larasense-limbo.yml  ← tracked as example

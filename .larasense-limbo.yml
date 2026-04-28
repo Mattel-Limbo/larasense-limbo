@@ -1,0 +1,18 @@
+provider:
+  base_url: http://localhost:1430
+  api_key: ${AI_API_KEY}
+  model: gpt-4o-mini
+  endpoint: chat  # "chat" for /v1/chat/completions, "responses" for /v1/responses
+
+review:
+  max_issues: 5
+  severity_threshold: medium
+
+filters:
+  include:
+    - "app/**"
+    - "routes/**"
+    - "resources/views/**"
+  exclude:
+    - "tests/**"
+    - "database/seeders/**"
