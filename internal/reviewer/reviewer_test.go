@@ -248,7 +248,7 @@ func TestBuildSummary_ScanNoIssues(t *testing.T) {
 func TestNew(t *testing.T) {
 	cfg := config.DefaultConfig()
 
-	r := New(cfg, true, false)
+	r := New(cfg, true, false, false)
 
 	if r.cfg != cfg {
 		t.Error("expected cfg to be stored")
@@ -259,17 +259,23 @@ func TestNew(t *testing.T) {
 	if r.noCache {
 		t.Error("expected noCache=false")
 	}
+	if r.fixMode {
+		t.Error("expected fixMode=false")
+	}
 }
 
 func TestNew_AllFlags(t *testing.T) {
 	cfg := config.DefaultConfig()
 
-	r := New(cfg, false, true)
+	r := New(cfg, false, true, true)
 
 	if r.verbose {
 		t.Error("expected verbose=false")
 	}
 	if !r.noCache {
 		t.Error("expected noCache=true")
+	}
+	if !r.fixMode {
+		t.Error("expected fixMode=true")
 	}
 }

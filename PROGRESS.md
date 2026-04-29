@@ -78,23 +78,34 @@ Status tracking untuk fitur-fitur larasense-limbo.
 | 41 | Full codebase scan command | ✅ Done | `larasense-limbo scan`, filesystem walker, dedicated AI prompt, token-aware batching |
 | 42 | Scanner module | ✅ Done | `internal/scanner/scanner.go`, walks filesystem, skips vendor/node_modules/storage/.git |
 | 43 | Token-aware batching | ✅ Done | `internal/reviewer/batcher.go`, ~80KB per batch (~20K tokens), oversized files get own batch |
-| 44 | Scan-specific AI prompt | ✅ Done | `BuildScanPrompt()`, optimized for full-file review (shorter than diff prompt, same JSON output) |
+| 44 | Scan-specific AI prompt | ✅ Done | `BuildScanPrompt()`, deterministic pattern-matching checklist, fixed severity levels |
 | 45 | Shared review pipeline | ✅ Done | Refactored `reviewer.go`: `review()` shared by `Run()` and `RunScan()`, `analyzeInBatches()` |
+| 46 | Deterministic AI config | ✅ Done | `temperature: 0.0`, `seed: 42`, `max_tokens: 1024` defaults for consistent results |
+| 47 | Pattern-matching prompts | ✅ Done | Prompts redesigned as deterministic scanner with fixed severity checklist, reduces hallucinated issues |
+| 48 | Markdown fallback parser | ✅ Done | `parseMarkdownFallback()` extracts issues from Markdown when AI ignores JSON instruction |
+| 49 | Robust JSON parser | ✅ Done | 5-strategy parser: direct JSON → code fence → `{"issues"` pattern → brace matching → Markdown fallback |
+| 50 | Subdirectory scan support | ✅ Done | `--path app/Http/Controllers` works correctly, paths relative to project root |
+| 51 | Recommended models docs | ✅ Done | 3-tier model ranking, best practice configs (production/budget/local/security), parameter reference |
+| 52 | Auto-fix suggestions | ✅ Done | `--fix` flag, before/after code blocks, `--patch` for unified diff, `--apply` for direct edit |
+| 53 | Fix struct in Issue | ✅ Done | `*Fix` field (start_line, end_line, before, after), nil when --fix not used, backward compatible |
+| 54 | Fixer module | ✅ Done | `internal/fixer/fixer.go`: GeneratePatch, WritePatch, ApplyFixes with before-validation safety |
+| 55 | Fix-aware AI prompts | ✅ Done | `BuildDiffFixPrompt()`, `BuildScanFixPrompt()` — only generate fixes for high+medium severity |
+| 56 | Fix cache integration | ✅ Done | CachedFix struct, cache invalidation when fixMode on but cached data lacks fixes |
 
 ## Future Ideas
 
 | # | Fitur | Status | Catatan |
 |---|-------|--------|---------|
-| 46 | Auto-fix suggestions | 💡 Future | Generate patch files dari AI suggestions |
-| 47 | Multi-language support | 💡 Future | Vue/JS files di Laravel project |
-| 48 | Rule customization | 💡 Future | Enable/disable specific rule categories |
-| 49 | Baseline support | 💡 Future | Ignore existing issues, hanya report baru |
-| 50 | SARIF output | 💡 Future | Standard format untuk security tools |
-| 51 | VS Code extension | 💡 Future | Real-time review di editor |
-| 52 | Pre-commit hook | 💡 Future | Review otomatis sebelum commit |
-| 53 | Team config sharing | 💡 Future | Shared config via package registry |
-| 54 | Review history/analytics | 💡 Future | Track issue trends over time |
-| 55 | Plugin system | 💡 Future | Custom analyzers via Go plugins |
+| 57 | Interactive fix mode | 💡 Future | `--fix --interactive`: prompt y/n per fix sebelum apply, preview diff per issue |
+| 58 | Multi-language support | 💡 Future | Vue/JS files di Laravel project |
+| 59 | Rule customization | 💡 Future | Enable/disable specific rule categories |
+| 60 | Baseline support | 💡 Future | Ignore existing issues, hanya report baru |
+| 61 | SARIF output | 💡 Future | Standard format untuk security tools |
+| 62 | VS Code extension | 💡 Future | Real-time review di editor |
+| 63 | Pre-commit hook | 💡 Future | Review otomatis sebelum commit |
+| 64 | Team config sharing | 💡 Future | Shared config via package registry |
+| 65 | Review history/analytics | 💡 Future | Track issue trends over time |
+| 66 | Plugin system | 💡 Future | Custom analyzers via Go plugins |
 
 ---
 
@@ -107,6 +118,6 @@ Status tracking untuk fitur-fitur larasense-limbo.
 | Testing | 8 | 0 | 0 |
 | CI/CD | 4 | 0 | 0 |
 | Planned Features | 8 | 0 | 0 |
-| New Features | 5 | 0 | 0 |
+| New Features | 16 | 0 | 0 |
 | Future Ideas | 0 | 0 | 10 |
-| **Total** | **45** | **0** | **10** |
+| **Total** | **56** | **0** | **10** |

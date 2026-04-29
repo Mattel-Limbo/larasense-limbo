@@ -26,10 +26,11 @@ type Reviewer struct {
 	cfg     *config.Config
 	verbose bool
 	noCache bool
+	fixMode bool
 }
 
-func New(cfg *config.Config, verbose, noCache bool) *Reviewer {
-	return &Reviewer{cfg: cfg, verbose: verbose, noCache: noCache}
+func New(cfg *config.Config, verbose, noCache, fixMode bool) *Reviewer {
+	return &Reviewer{cfg: cfg, verbose: verbose, noCache: noCache, fixMode: fixMode}
 }
 
 // Run executes the diff-based review pipeline.
@@ -127,17 +128,26 @@ func (r *Reviewer) review(allFiles []context.FileContext, mode string) (*Result,
 			for _, f := range filesToReview {
 				// Collect issues belonging to this file
 				var fileIssues []cache.CachedIssue
-				for _, issue := range newIssues {
-					if issue.File == f.Path {
-						fileIssues = append(fileIssues, cache.CachedIssue{
-							Title:       issue.Title,
-							Description: issue.Description,
-							File:        issue.File,
-							Line:        issue.Line,
-							Severity:    issue.Severity,
-							Suggestion:  issue.Suggestion,
-						})
+			for _, issue := range newIssues {
+				if issue.File == f.Path {
+					ci := cache.CachedIssue{
+						Title:       issue.Title,
+						Description: issue.Description,
+						File:        issue.File,
+						Line:        issue.Line,
+						Severity:    issue.Severity,
+						Suggestion:  issue.Suggestion,
 					}
+					if issue.Fix != nil {
+						ci.Fix = &cache.CachedFix{
+							StartLine: issue.Fix.StartLine,
+							EndLine:   issue.Fix.EndLine,
+							Before:    issue.Fix.Before,
+							After:     issue.Fix.After,
+						}
+					}
+					fileIssues = append(fileIssues, ci)
+				}
 				}
 				reviewCache.UpdateWithIssues(f.Path, f.DiffText, fileIssues)
 			}
@@ -174,16 +184,30 @@ func (r *Reviewer) filterCached(files []context.FileContext) ([]context.FileCont
 
 	for _, f := range files {
 		if issues, hit := reviewCache.GetCachedIssues(f.Path, f.DiffText); hit {
+			// If fix mode is on but cached issues lack fix data, re-analyze
+			if r.fixMode && len(issues) > 0 && !cachedHasFixes(issues) {
+				filesToReview = append(filesToReview, f)
+				continue
+			}
 			log.Printf("Using cached results for %s (%d issue(s))", f.Path, len(issues))
 			for _, ci := range issues {
-				cachedIssues = append(cachedIssues, Issue{
+				issue := Issue{
 					Title:       ci.Title,
 					Description: ci.Description,
 					File:        ci.File,
 					Line:        ci.Line,
 					Severity:    ci.Severity,
 					Suggestion:  ci.Suggestion,
-				})
+				}
+				if ci.Fix != nil {
+					issue.Fix = &ai.Fix{
+						StartLine: ci.Fix.StartLine,
+						EndLine:   ci.Fix.EndLine,
+						Before:    ci.Fix.Before,
+						After:     ci.Fix.After,
+					}
+				}
+				cachedIssues = append(cachedIssues, issue)
 			}
 		} else if reviewCache.HasChanged(f.Path, f.DiffText) {
 			filesToReview = append(filesToReview, f)
@@ -201,9 +225,17 @@ func (r *Reviewer) analyzeInBatches(files []context.FileContext, mode string) ([
 
 	client := ai.NewClient(&r.cfg.Provider, r.verbose)
 
-	systemPrompt := ai.BuildDiffPrompt()
-	if mode == "scan" {
-		systemPrompt = ai.BuildScanPrompt()
+	var systemPrompt string
+	if r.fixMode {
+		systemPrompt = ai.BuildDiffFixPrompt()
+		if mode == "scan" {
+			systemPrompt = ai.BuildScanFixPrompt()
+		}
+	} else {
+		systemPrompt = ai.BuildDiffPrompt()
+		if mode == "scan" {
+			systemPrompt = ai.BuildScanPrompt()
+		}
 	}
 	if r.cfg.Review.CustomPrompt != "" {
 		systemPrompt += "\n\nAdditional instructions from the user:\n" + r.cfg.Review.CustomPrompt
@@ -302,4 +334,13 @@ func buildSummary(issues []ai.Issue, filesCount int, mode string) string {
 		"%s %d file(s). Found %d issue(s): %d high, %d medium, %d low.",
 		prefix, filesCount, len(issues), high, medium, low,
 	)
+}
+
+func cachedHasFixes(issues []cache.CachedIssue) bool {
+	for _, ci := range issues {
+		if ci.Fix != nil {
+			return true
+		}
+	}
+	return false
 }

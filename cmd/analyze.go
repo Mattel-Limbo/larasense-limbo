@@ -23,6 +23,9 @@ var (
 	flagVerbose  bool
 	flagNoCache  bool
 	flagGitHubPR string
+	flagFix      bool
+	flagApply    bool
+	flagPatch    string
 )
 
 var analyzeCmd = &cobra.Command{
@@ -44,12 +47,21 @@ func init() {
 	analyzeCmd.Flags().BoolVar(&flagVerbose, "verbose", false, "Show detailed request/response logs for debugging")
 	analyzeCmd.Flags().BoolVar(&flagNoCache, "no-cache", false, "Skip cache and re-review all files")
 	analyzeCmd.Flags().StringVar(&flagGitHubPR, "github-pr", "", "Post results as PR comment (format: owner/repo#number)")
+	analyzeCmd.Flags().BoolVar(&flagFix, "fix", false, "Generate code fix suggestions for issues")
+	analyzeCmd.Flags().BoolVar(&flagApply, "apply", false, "Apply fixes directly to files (requires --fix)")
+	analyzeCmd.Flags().StringVar(&flagPatch, "patch", "", "Write fixes as unified diff to file (requires --fix)")
 
 	rootCmd.AddCommand(analyzeCmd)
 }
 
 func runAnalyze(cmd *cobra.Command, args []string) error {
-	// Load configuration
+	if flagApply && !flagFix {
+		return fmt.Errorf("--apply requires --fix")
+	}
+	if flagPatch != "" && !flagFix {
+		return fmt.Errorf("--patch requires --fix")
+	}
+
 	cfg, err := config.Load()
 	if err != nil {
 		return fmt.Errorf("loading config: %w", err)
@@ -58,20 +70,17 @@ func runAnalyze(cmd *cobra.Command, args []string) error {
 	log.Printf("Using AI provider: %s (model: %s)", cfg.Provider.BaseURL, cfg.Provider.Model)
 	log.Printf("Comparing %s...%s", flagBase, flagHead)
 
-	// Run the review pipeline
-	rev := reviewer.New(cfg, flagVerbose, flagNoCache)
+	rev := reviewer.New(cfg, flagVerbose, flagNoCache, flagFix)
 	result, err := rev.Run(flagBase, flagHead)
 	if err != nil {
 		return fmt.Errorf("review failed: %w", err)
 	}
 
-	// Resolve output format (--json is shorthand for --format json)
 	format := flagFormat
 	if flagJSON {
 		format = "json"
 	}
 
-	// Output results
 	switch format {
 	case "json":
 		jsonOut, err := output.FormatJSON(result)
@@ -85,14 +94,16 @@ func runAnalyze(cmd *cobra.Command, args []string) error {
 		fmt.Fprint(os.Stdout, output.FormatHuman(result))
 	}
 
-	// Post to GitHub PR if requested
+	if err := handleFixOutput(result, flagFix, flagApply, flagPatch); err != nil {
+		return err
+	}
+
 	if flagGitHubPR != "" {
 		if err := postToGitHubPR(flagGitHubPR, result); err != nil {
 			log.Printf("Warning: failed to post GitHub PR comment: %v", err)
 		}
 	}
 
-	// Exit with non-zero if high-severity issues found
 	for _, issue := range result.Issues {
 		if issue.Severity == "high" {
 			os.Exit(1)

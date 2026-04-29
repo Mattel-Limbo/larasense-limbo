@@ -12,12 +12,20 @@ const cacheFile = ".larasense-limbo-cache.json"
 
 // CachedIssue represents a single code review finding stored in cache.
 type CachedIssue struct {
-	Title       string `json:"title"`
-	Description string `json:"description"`
-	File        string `json:"file"`
-	Line        int    `json:"line"`
-	Severity    string `json:"severity"`
-	Suggestion  string `json:"suggestion"`
+	Title       string     `json:"title"`
+	Description string     `json:"description"`
+	File        string     `json:"file"`
+	Line        int        `json:"line"`
+	Severity    string     `json:"severity"`
+	Suggestion  string     `json:"suggestion"`
+	Fix         *CachedFix `json:"fix,omitempty"`
+}
+
+type CachedFix struct {
+	StartLine int    `json:"start_line"`
+	EndLine   int    `json:"end_line"`
+	Before    string `json:"before"`
+	After     string `json:"after"`
 }
 
 // Entry represents a cached review result for a single file.

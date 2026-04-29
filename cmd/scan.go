@@ -19,6 +19,9 @@ var (
 	flagScanFormat  string
 	flagScanVerbose bool
 	flagScanNoCache bool
+	flagScanFix     bool
+	flagScanApply   bool
+	flagScanPatch   string
 )
 
 var scanCmd = &cobra.Command{
@@ -38,11 +41,21 @@ func init() {
 	scanCmd.Flags().StringVar(&flagScanFormat, "format", "human", "Output format: human, json, github")
 	scanCmd.Flags().BoolVar(&flagScanVerbose, "verbose", false, "Show detailed request/response logs for debugging")
 	scanCmd.Flags().BoolVar(&flagScanNoCache, "no-cache", false, "Skip cache and re-scan all files")
+	scanCmd.Flags().BoolVar(&flagScanFix, "fix", false, "Generate code fix suggestions for issues")
+	scanCmd.Flags().BoolVar(&flagScanApply, "apply", false, "Apply fixes directly to files (requires --fix)")
+	scanCmd.Flags().StringVar(&flagScanPatch, "patch", "", "Write fixes as unified diff to file (requires --fix)")
 
 	rootCmd.AddCommand(scanCmd)
 }
 
 func runScan(cmd *cobra.Command, args []string) error {
+	if flagScanApply && !flagScanFix {
+		return fmt.Errorf("--apply requires --fix")
+	}
+	if flagScanPatch != "" && !flagScanFix {
+		return fmt.Errorf("--patch requires --fix")
+	}
+
 	cfg, err := config.Load()
 	if err != nil {
 		return fmt.Errorf("loading config: %w", err)
@@ -64,7 +77,7 @@ func runScan(cmd *cobra.Command, args []string) error {
 
 	log.Printf("Found %d Laravel files to scan", len(files))
 
-	rev := reviewer.New(cfg, flagScanVerbose, flagScanNoCache)
+	rev := reviewer.New(cfg, flagScanVerbose, flagScanNoCache, flagScanFix)
 	result, err := rev.RunScan(files)
 	if err != nil {
 		return fmt.Errorf("scan failed: %w", err)
@@ -86,6 +99,10 @@ func runScan(cmd *cobra.Command, args []string) error {
 		fmt.Fprint(os.Stdout, output.FormatGitHubAnnotations(result))
 	default:
 		fmt.Fprint(os.Stdout, output.FormatHuman(result))
+	}
+
+	if err := handleFixOutput(result, flagScanFix, flagScanApply, flagScanPatch); err != nil {
+		return err
 	}
 
 	for _, issue := range result.Issues {

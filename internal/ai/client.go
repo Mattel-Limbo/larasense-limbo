@@ -81,6 +81,14 @@ type Issue struct {
 	Line        int    `json:"line"`
 	Severity    string `json:"severity"`
 	Suggestion  string `json:"suggestion"`
+	Fix         *Fix   `json:"fix,omitempty"`
+}
+
+type Fix struct {
+	StartLine int    `json:"start_line"`
+	EndLine   int    `json:"end_line"`
+	Before    string `json:"before"`
+	After     string `json:"after"`
 }
 
 // Analyze sends the diff and context to the AI provider using the diff review prompt.
@@ -604,6 +612,43 @@ RULES:
 
 {"issues":[{"title":"string","description":"string","file":"string","line":0,"severity":"high|medium|low","suggestion":"string"}]}
 Empty: {"issues":[]}`
+}
+
+const fixPromptSuffix = `
+
+ADDITIONAL: For each HIGH and MEDIUM severity issue, include a "fix" object with the exact code replacement.
+- "start_line" and "end_line": the line range to replace (1-indexed, inclusive)
+- "before": the EXACT original code from those lines (copy verbatim)
+- "after": the corrected replacement code (drop-in replacement)
+- Do NOT include "fix" for LOW severity or issues requiring structural refactoring
+- If you cannot provide an exact fix, omit the "fix" field for that issue
+
+{"issues":[{"title":"string","description":"string","file":"string","line":0,"severity":"high|medium|low","suggestion":"string","fix":{"start_line":0,"end_line":0,"before":"original code","after":"fixed code"}}]}
+Empty: {"issues":[]}`
+
+func BuildDiffFixPrompt() string {
+	base := BuildDiffPrompt()
+	base = stripJSONSchemaLines(base)
+	return base + fixPromptSuffix
+}
+
+func BuildScanFixPrompt() string {
+	base := BuildScanPrompt()
+	base = stripJSONSchemaLines(base)
+	return base + fixPromptSuffix
+}
+
+func stripJSONSchemaLines(prompt string) string {
+	lines := strings.Split(prompt, "\n")
+	var result []string
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, `{"issues":[{`) || trimmed == `Empty: {"issues":[]}` {
+			continue
+		}
+		result = append(result, line)
+	}
+	return strings.Join(result, "\n")
 }
 
 // truncate shortens a string to maxLen characters.

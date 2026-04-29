@@ -145,6 +145,9 @@ larasense-limbo analyze --base main --head HEAD --json
 | `--no-cache` | bool | `false` | Skip cache and re-review all files |
 | `--format` | string | `human` | Output format: `human`, `json`, `github` |
 | `--github-pr` | string | | Post results as PR comment (format: `owner/repo#number`) |
+| `--fix` | bool | `false` | Generate code fix suggestions for issues |
+| `--patch` | string | | Write fixes as unified diff to file (requires `--fix`) |
+| `--apply` | bool | `false` | Apply fixes directly to files (requires `--fix`) |
 
 ### Scan (Full Codebase Audit)
 
@@ -179,10 +182,66 @@ larasense-limbo scan --no-cache
 | `--format` | string | `human` | Output format: `human`, `json`, `github` |
 | `--verbose` | bool | `false` | Show detailed AI request/response logs |
 | `--no-cache` | bool | `false` | Skip cache and re-scan all files |
+| `--fix` | bool | `false` | Generate code fix suggestions for issues |
+| `--patch` | string | | Write fixes as unified diff to file (requires `--fix`) |
+| `--apply` | bool | `false` | Apply fixes directly to files (requires `--fix`) |
 
 The scan command automatically skips `vendor/`, `node_modules/`, `.git/`, and `storage/` directories. Files are filtered using the same `include`/`exclude` glob patterns from your config.
 
 For large projects, files are automatically split into token-aware batches (~20K tokens each) to stay within AI provider limits.
+
+### Auto-fix Suggestions (`--fix`)
+
+Generate code fix suggestions alongside issue detection. Works with both `analyze` and `scan`:
+
+```bash
+# Show issues with before/after fix code in terminal
+larasense-limbo analyze --fix
+larasense-limbo scan --fix
+larasense-limbo scan --path app/Http/Controllers --fix
+
+# Generate a patch file (review before applying)
+larasense-limbo scan --fix --patch fixes.patch
+git apply fixes.patch
+
+# Apply fixes directly to files (use with caution)
+larasense-limbo scan --fix --apply
+larasense-limbo analyze --base main --fix --apply
+```
+
+#### Fix Flags (available on both `analyze` and `scan`)
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--fix` | bool | `false` | Generate code fix suggestions for high and medium severity issues |
+| `--patch` | string | | Write fixes as unified diff to file (requires `--fix`) |
+| `--apply` | bool | `false` | Apply fixes directly to source files (requires `--fix`) |
+
+#### How It Works
+
+1. When `--fix` is used, the AI prompt is enhanced to request before/after code blocks
+2. Fixes are only generated for **high** and **medium** severity issues (saves tokens)
+3. Without `--fix`, the pipeline is unchanged — zero extra token consumption
+
+#### Output with `--fix`
+
+```
+  🔴 [HIGH] #1: Mass Assignment Vulnerability
+     Line: 15
+     Using $request->all() passes unvalidated data directly to create()
+     💡 Suggestion: Use $request->validated() with a Form Request
+     ┌─ Before:
+     │ - $user = User::create($request->all());
+     ├─ After:
+     │ + $user = User::create($request->validated());
+     └─
+```
+
+#### Safety
+
+- **Before-validation**: Before applying any fix, the tool compares the `before` code against the actual file content. If they don't match (file was edited since analysis), the fix is skipped.
+- **`--apply` requires `--fix`**: You can't accidentally apply without generating fixes first.
+- **Patch review**: Use `--patch` to generate a diff file you can review before applying with `git apply`.
 
 ### Output Examples
 

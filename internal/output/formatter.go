@@ -57,6 +57,18 @@ func FormatHuman(result *reviewer.Result) string {
 			if issue.Suggestion != "" {
 				fmt.Fprintf(&sb, "     💡 Suggestion: %s\n", issue.Suggestion)
 			}
+
+			if issue.Fix != nil {
+				sb.WriteString("     ┌─ Before:\n")
+				for _, line := range strings.Split(issue.Fix.Before, "\n") {
+					fmt.Fprintf(&sb, "     │ \033[31m- %s\033[0m\n", line)
+				}
+				sb.WriteString("     ├─ After:\n")
+				for _, line := range strings.Split(issue.Fix.After, "\n") {
+					fmt.Fprintf(&sb, "     │ \033[32m+ %s\033[0m\n", line)
+				}
+				sb.WriteString("     └─\n")
+			}
 		}
 		sb.WriteString("\n")
 	}
