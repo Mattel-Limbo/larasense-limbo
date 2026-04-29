@@ -43,8 +43,8 @@ Status tracking untuk fitur-fitur larasense-limbo.
 | 21 | Diff parser tests | ✅ Done | Parse, empty, hunk header, changed lines |
 | 22 | Context builder tests | ✅ Done | classifyFile, isLaravelFile, matchGlob, generateHint |
 | 23 | AI response parser tests | ✅ Done | Direct JSON, markdown wrapped, surrounding text, Chat Completions, Responses API |
-| 24 | Git module tests | 📋 Planned | Mock git commands |
-| 25 | Reviewer integration tests | 📋 Planned | End-to-end pipeline test |
+| 24 | Git module tests | ✅ Done | Real temp git repo: GetDiff, GetFileContent, GetSurroundingLines, error cases, multi-file diff |
+| 25 | Reviewer integration tests | ✅ Done | filterIssues (threshold + max + combined), meetsThreshold (case-insensitive + unknown), buildSummary, New constructor |
 | 26 | Output formatter tests | ✅ Done | FormatJSON, FormatHuman, groupByFile, severityIcon, empty/no-issues cases |
 | 27 | Config loader tests | ✅ Done | DefaultConfig, Load (valid/missing/defaults), env var expansion, validation |
 | 28 | CLI command tests | ✅ Done | version output, init create/refuse/force, analyze flags, root subcommands |
@@ -94,8 +94,8 @@ Status tracking untuk fitur-fitur larasense-limbo.
 |----------|------|---------|--------|
 | Core (MVP) | 15 | 0 | 0 |
 | Reliability | 5 | 0 | 0 |
-| Testing | 6 | 2 | 0 |
+| Testing | 8 | 0 | 0 |
 | CI/CD | 4 | 0 | 0 |
 | Planned Features | 8 | 0 | 0 |
 | Future Ideas | 0 | 0 | 10 |
-| **Total** | **38** | **2** | **10** |
+| **Total** | **40** | **0** | **10** |
