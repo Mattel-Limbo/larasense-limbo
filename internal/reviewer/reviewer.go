@@ -13,31 +13,27 @@ import (
 	"github.com/Mattel-Limbo/larasense-limbo/internal/git"
 )
 
-// Issue is a re-export of ai.Issue for use by consumers of this package.
 type Issue = ai.Issue
 
-// Result holds the final review output.
 type Result struct {
 	Issues     []Issue `json:"issues"`
 	FilesCount int     `json:"files_analyzed"`
 	Summary    string  `json:"summary"`
+	Mode       string  `json:"mode"`
 }
 
-// Reviewer orchestrates the full code review pipeline.
 type Reviewer struct {
-	cfg      *config.Config
-	verbose  bool
-	noCache  bool
+	cfg     *config.Config
+	verbose bool
+	noCache bool
 }
 
-// New creates a new Reviewer.
 func New(cfg *config.Config, verbose, noCache bool) *Reviewer {
 	return &Reviewer{cfg: cfg, verbose: verbose, noCache: noCache}
 }
 
-// Run executes the full review pipeline: diff → parse → context → AI → result.
+// Run executes the diff-based review pipeline.
 func (r *Reviewer) Run(base, head string) (*Result, error) {
-	// Step 1: Get git diff
 	log.Printf("Getting diff: %s...%s", base, head)
 	rawDiff, err := git.GetDiff(base, head)
 	if err != nil {
@@ -47,10 +43,10 @@ func (r *Reviewer) Run(base, head string) (*Result, error) {
 	if strings.TrimSpace(rawDiff) == "" {
 		return &Result{
 			Summary: "No changes found between the specified refs.",
+			Mode:    "diff",
 		}, nil
 	}
 
-	// Step 2: Parse diff
 	log.Println("Parsing diff...")
 	files, err := diff.Parse(rawDiff)
 	if err != nil {
@@ -60,12 +56,12 @@ func (r *Reviewer) Run(base, head string) (*Result, error) {
 	if len(files) == 0 {
 		return &Result{
 			Summary: "No files found in diff.",
+			Mode:    "diff",
 		}, nil
 	}
 
 	log.Printf("Found %d changed files in diff", len(files))
 
-	// Step 3: Build context
 	log.Println("Building Laravel context...")
 	builder := context.NewBuilder(r.cfg, head)
 	reviewCtx, err := builder.Build(files)
@@ -76,60 +72,51 @@ func (r *Reviewer) Run(base, head string) (*Result, error) {
 	if len(reviewCtx.Files) == 0 {
 		return &Result{
 			Summary: "No Laravel-relevant files found in the diff. Only .php and .blade.php files in app/, routes/, resources/views/ are analyzed.",
+			Mode:    "diff",
 		}, nil
 	}
 
 	log.Printf("Analyzing %d Laravel files", len(reviewCtx.Files))
 
-	// Step 4: Filter cached files (skip unchanged)
-	var filesToReview []context.FileContext
-	var reviewCache *cache.Cache
+	return r.review(reviewCtx.Files, "diff")
+}
 
-	if !r.noCache {
-		reviewCache = cache.Load()
-		for _, f := range reviewCtx.Files {
-			if reviewCache.HasChanged(f.Path, f.DiffText) {
-				filesToReview = append(filesToReview, f)
-			} else {
-				log.Printf("Skipping %s (unchanged since last review)", f.Path)
-			}
-		}
-	} else {
-		filesToReview = reviewCtx.Files
-	}
-
-	if len(filesToReview) == 0 {
+// RunScan executes the full-scan review pipeline.
+func (r *Reviewer) RunScan(files []context.FileContext) (*Result, error) {
+	if len(files) == 0 {
 		return &Result{
-			FilesCount: len(reviewCtx.Files),
-			Summary:    fmt.Sprintf("All %d file(s) unchanged since last review. Nothing to analyze.", len(reviewCtx.Files)),
+			Summary: "No Laravel files found to scan.",
+			Mode:    "scan",
 		}, nil
 	}
 
-	if len(filesToReview) < len(reviewCtx.Files) {
-		log.Printf("Reviewing %d of %d files (%d cached)", len(filesToReview), len(reviewCtx.Files), len(reviewCtx.Files)-len(filesToReview))
+	log.Printf("Scanning %d Laravel files", len(files))
+
+	return r.review(files, "scan")
+}
+
+func (r *Reviewer) review(allFiles []context.FileContext, mode string) (*Result, error) {
+	filesToReview, reviewCache := r.filterCached(allFiles)
+
+	if len(filesToReview) == 0 {
+		return &Result{
+			FilesCount: len(allFiles),
+			Summary:    fmt.Sprintf("All %d file(s) unchanged since last review. Nothing to analyze.", len(allFiles)),
+			Mode:       mode,
+		}, nil
 	}
 
-	// Step 5: Build diff text for AI
-	var diffText strings.Builder
-	for _, f := range filesToReview {
-		fmt.Fprintf(&diffText, "--- %s ---\n%s\n", f.Path, f.DiffText)
+	if len(filesToReview) < len(allFiles) {
+		log.Printf("Reviewing %d of %d files (%d cached)", len(filesToReview), len(allFiles), len(allFiles)-len(filesToReview))
 	}
 
-	filteredCtx := &context.ReviewContext{Files: filesToReview}
-	contextText := filteredCtx.FormatForAI()
-
-	// Step 6: Send to AI
-	log.Println("Sending to AI provider for analysis...")
-	client := ai.NewClient(&r.cfg.Provider, r.verbose)
-	aiResp, err := client.Analyze(diffText.String(), contextText, r.cfg.Review.CustomPrompt)
+	allIssues, err := r.analyzeInBatches(filesToReview, mode)
 	if err != nil {
-		return nil, fmt.Errorf("AI analysis: %w", err)
+		return nil, err
 	}
 
-	// Step 7: Apply filters
-	issues := filterIssues(aiResp.Issues, r.cfg)
+	issues := filterIssues(allIssues, r.cfg)
 
-	// Step 8: Update cache
 	if reviewCache != nil {
 		for _, f := range filesToReview {
 			reviewCache.Update(f.Path, f.DiffText)
@@ -139,22 +126,80 @@ func (r *Reviewer) Run(base, head string) (*Result, error) {
 		}
 	}
 
-	// Step 9: Build result
-	result := &Result{
+	return &Result{
 		Issues:     issues,
-		FilesCount: len(reviewCtx.Files),
-		Summary:    buildSummary(issues, len(reviewCtx.Files)),
-	}
-
-	return result, nil
+		FilesCount: len(allFiles),
+		Summary:    buildSummary(issues, len(allFiles), mode),
+		Mode:       mode,
+	}, nil
 }
 
-// filterIssues applies max_issues and severity_threshold from config.
+func (r *Reviewer) filterCached(files []context.FileContext) ([]context.FileContext, *cache.Cache) {
+	if r.noCache {
+		return files, nil
+	}
+
+	reviewCache := cache.Load()
+	var filesToReview []context.FileContext
+
+	for _, f := range files {
+		if reviewCache.HasChanged(f.Path, f.DiffText) {
+			filesToReview = append(filesToReview, f)
+		} else {
+			log.Printf("Skipping %s (unchanged since last review)", f.Path)
+		}
+	}
+
+	return filesToReview, reviewCache
+}
+
+func (r *Reviewer) analyzeInBatches(files []context.FileContext, mode string) ([]ai.Issue, error) {
+	batches := batchFiles(files)
+	log.Printf("Split %d files into %d batch(es)", len(files), len(batches))
+
+	client := ai.NewClient(&r.cfg.Provider, r.verbose)
+
+	systemPrompt := ai.BuildDiffPrompt()
+	if mode == "scan" {
+		systemPrompt = ai.BuildScanPrompt()
+	}
+	if r.cfg.Review.CustomPrompt != "" {
+		systemPrompt += "\n\nAdditional instructions from the user:\n" + r.cfg.Review.CustomPrompt
+	}
+
+	var allIssues []ai.Issue
+
+	for i, batch := range batches {
+		log.Printf("Analyzing batch %d/%d (%d files)...", i+1, len(batches), len(batch))
+
+		ctx := &context.ReviewContext{Files: batch}
+
+		var userContent string
+		if mode == "scan" {
+			userContent = ctx.FormatForScan()
+		} else {
+			var diffText strings.Builder
+			for _, f := range batch {
+				fmt.Fprintf(&diffText, "--- %s ---\n%s\n", f.Path, f.DiffText)
+			}
+			userContent = fmt.Sprintf("## File Context\n\n%s\n\n## Git Diff\n\n%s", ctx.FormatForAI(), diffText.String())
+		}
+
+		resp, err := client.AnalyzeWithPrompt(systemPrompt, userContent)
+		if err != nil {
+			return nil, fmt.Errorf("batch %d/%d failed: %w", i+1, len(batches), err)
+		}
+
+		allIssues = append(allIssues, resp.Issues...)
+	}
+
+	return allIssues, nil
+}
+
 func filterIssues(issues []ai.Issue, cfg *config.Config) []ai.Issue {
 	threshold := cfg.Review.SeverityThreshold
 	maxIssues := cfg.Review.MaxIssues
 
-	// Filter by severity threshold
 	var filtered []ai.Issue
 	for _, issue := range issues {
 		if meetsThreshold(issue.Severity, threshold) {
@@ -162,7 +207,6 @@ func filterIssues(issues []ai.Issue, cfg *config.Config) []ai.Issue {
 		}
 	}
 
-	// Limit count
 	if maxIssues > 0 && len(filtered) > maxIssues {
 		filtered = filtered[:maxIssues]
 	}
@@ -170,7 +214,6 @@ func filterIssues(issues []ai.Issue, cfg *config.Config) []ai.Issue {
 	return filtered
 }
 
-// meetsThreshold checks if an issue's severity meets the minimum threshold.
 func meetsThreshold(severity, threshold string) bool {
 	levels := map[string]int{
 		"low":    1,
@@ -191,10 +234,14 @@ func meetsThreshold(severity, threshold string) bool {
 	return issueLvl >= threshLvl
 }
 
-// buildSummary creates a human-readable summary of the review.
-func buildSummary(issues []ai.Issue, filesCount int) string {
+func buildSummary(issues []ai.Issue, filesCount int, mode string) string {
+	prefix := "Reviewed"
+	if mode == "scan" {
+		prefix = "Scanned"
+	}
+
 	if len(issues) == 0 {
-		return fmt.Sprintf("Reviewed %d file(s). No issues found. Great job!", filesCount)
+		return fmt.Sprintf("%s %d file(s). No issues found. Great job!", prefix, filesCount)
 	}
 
 	var high, medium, low int
@@ -210,7 +257,7 @@ func buildSummary(issues []ai.Issue, filesCount int) string {
 	}
 
 	return fmt.Sprintf(
-		"Reviewed %d file(s). Found %d issue(s): %d high, %d medium, %d low.",
-		filesCount, len(issues), high, medium, low,
+		"%s %d file(s). Found %d issue(s): %d high, %d medium, %d low.",
+		prefix, filesCount, len(issues), high, medium, low,
 	)
 }

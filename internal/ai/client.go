@@ -71,14 +71,22 @@ type Issue struct {
 	Suggestion  string `json:"suggestion"`
 }
 
-// Analyze sends the diff and context to the AI provider and returns structured issues.
-// customPrompt is appended to the system prompt if non-empty.
+// Analyze sends the diff and context to the AI provider using the diff review prompt.
 func (c *Client) Analyze(diffText, contextText, customPrompt string) (*Response, error) {
-	systemPrompt := buildPrompt()
+	systemPrompt := BuildDiffPrompt()
 	if customPrompt != "" {
 		systemPrompt += "\n\nAdditional instructions from the user:\n" + customPrompt
 	}
 	userContent := fmt.Sprintf("## File Context\n\n%s\n\n## Git Diff\n\n%s", contextText, diffText)
+	return c.send(systemPrompt, userContent)
+}
+
+// AnalyzeWithPrompt sends content to the AI provider using a caller-provided system prompt.
+func (c *Client) AnalyzeWithPrompt(systemPrompt, userContent string) (*Response, error) {
+	return c.send(systemPrompt, userContent)
+}
+
+func (c *Client) send(systemPrompt, userContent string) (*Response, error) {
 
 	var jsonBody []byte
 	var err error
@@ -236,87 +244,261 @@ func extractContent(body []byte) (*Response, error) {
 }
 
 // parseIssuesFromText extracts JSON issues from a text response that may contain
-// markdown code fences or other wrapping.
+// markdown code fences, surrounding text, or full markdown responses.
 func parseIssuesFromText(text string) (*Response, error) {
-	// Strip markdown code fences if present
-	cleaned := text
-	cleaned = strings.TrimSpace(cleaned)
+	cleaned := strings.TrimSpace(text)
 
-	// Remove ```json ... ``` wrapping
-	if strings.HasPrefix(cleaned, "```") {
-		lines := strings.Split(cleaned, "\n")
-		// Remove first line (```json) and last line (```)
-		if len(lines) > 2 {
-			start := 1
-			end := len(lines) - 1
-			if strings.TrimSpace(lines[end]) == "```" || strings.TrimSpace(lines[end]) == "" {
-				// Find the closing ```
-				for i := len(lines) - 1; i >= 0; i-- {
-					if strings.TrimSpace(lines[i]) == "```" {
-						end = i
-						break
-					}
-				}
-			}
-			cleaned = strings.Join(lines[start:end], "\n")
-		}
+	// Try 1: Direct JSON parse
+	var resp Response
+	if err := json.Unmarshal([]byte(cleaned), &resp); err == nil {
+		return &resp, nil
 	}
 
-	cleaned = strings.TrimSpace(cleaned)
-
-	var resp Response
-	if err := json.Unmarshal([]byte(cleaned), &resp); err != nil {
-		// Try to find JSON object in the text
-		startIdx := strings.Index(cleaned, "{")
-		endIdx := strings.LastIndex(cleaned, "}")
-		if startIdx >= 0 && endIdx > startIdx {
-			jsonStr := cleaned[startIdx : endIdx+1]
-			if err2 := json.Unmarshal([]byte(jsonStr), &resp); err2 != nil {
-				return nil, fmt.Errorf("parsing issues JSON: %w (raw: %s)", err2, truncate(cleaned, 200))
-			}
+	// Try 2: Extract from markdown code fences (```json ... ```)
+	if extracted := extractFromCodeFence(cleaned); extracted != "" {
+		if err := json.Unmarshal([]byte(extracted), &resp); err == nil {
 			return &resp, nil
 		}
-		return nil, fmt.Errorf("parsing issues JSON: %w (raw: %s)", err, truncate(cleaned, 200))
 	}
 
-	return &resp, nil
+	// Try 3: Find {"issues" pattern anywhere in the text
+	if idx := strings.Index(cleaned, `{"issues"`); idx >= 0 {
+		candidate := cleaned[idx:]
+		endIdx := findMatchingBrace(candidate)
+		if endIdx > 0 {
+			jsonStr := candidate[:endIdx+1]
+			if err := json.Unmarshal([]byte(jsonStr), &resp); err == nil {
+				return &resp, nil
+			}
+		}
+	}
+
+	// Try 4: Find any JSON object with braces
+	startIdx := strings.Index(cleaned, "{")
+	endIdx := strings.LastIndex(cleaned, "}")
+	if startIdx >= 0 && endIdx > startIdx {
+		jsonStr := cleaned[startIdx : endIdx+1]
+		if err := json.Unmarshal([]byte(jsonStr), &resp); err == nil {
+			return &resp, nil
+		}
+	}
+
+	// Try 5: Parse Markdown response as fallback (some models ignore JSON-only instruction)
+	if issues := parseMarkdownFallback(cleaned); len(issues) > 0 {
+		return &Response{Issues: issues}, nil
+	}
+
+	return nil, fmt.Errorf("parsing issues JSON: no valid JSON found in AI response (raw: %s)", truncate(cleaned, 200))
 }
 
-// buildPrompt returns the system prompt for the AI code reviewer.
-func buildPrompt() string {
-	return `You are a Senior Laravel Developer performing a strict code review.
+func extractFromCodeFence(text string) string {
+	lines := strings.Split(text, "\n")
+	inFence := false
+	var jsonLines []string
 
-Analyze the provided git diff and file context. Focus ONLY on:
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if !inFence && (trimmed == "```json" || trimmed == "```") {
+			inFence = true
+			continue
+		}
+		if inFence && trimmed == "```" {
+			break
+		}
+		if inFence {
+			jsonLines = append(jsonLines, line)
+		}
+	}
 
-1. **Performance Issues**: N+1 queries, unnecessary database queries, missing eager loading, inefficient loops
-2. **Security Issues**: Missing validation, mass assignment vulnerabilities, SQL injection risks, XSS in Blade templates, CSRF issues
-3. **Bad Practices**: Fat controllers, business logic in Blade views, missing form requests, improper error handling, hardcoded values
-4. **Laravel Conventions**: Improper use of Eloquent, missing route model binding, incorrect naming conventions, missing middleware
-
-Rules:
-- Only report issues found in the CHANGED lines (the diff), not in surrounding context
-- Be specific about the file and line number
-- Provide actionable suggestions
-- Rate severity as: low, medium, or high
-- Do NOT report style-only issues (formatting, spacing)
-- Do NOT report issues in test files
-
-You MUST respond with ONLY valid JSON in this exact format (no markdown, no explanation, just JSON):
-
-{
-  "issues": [
-    {
-      "title": "Brief issue title",
-      "description": "Detailed explanation of the problem",
-      "file": "path/to/file.php",
-      "line": 42,
-      "severity": "low|medium|high",
-      "suggestion": "How to fix this issue"
-    }
-  ]
+	if len(jsonLines) > 0 {
+		return strings.TrimSpace(strings.Join(jsonLines, "\n"))
+	}
+	return ""
 }
 
-If there are no issues, respond with: {"issues": []}`
+// findMatchingBrace finds the index of the closing brace that matches the opening brace at index 0.
+func findMatchingBrace(s string) int {
+	depth := 0
+	inString := false
+	escaped := false
+
+	for i, ch := range s {
+		if escaped {
+			escaped = false
+			continue
+		}
+		if ch == '\\' && inString {
+			escaped = true
+			continue
+		}
+		if ch == '"' {
+			inString = !inString
+			continue
+		}
+		if inString {
+			continue
+		}
+		if ch == '{' {
+			depth++
+		}
+		if ch == '}' {
+			depth--
+			if depth == 0 {
+				return i
+			}
+		}
+	}
+	return -1
+}
+
+// parseMarkdownFallback extracts issues from a Markdown-formatted AI response.
+// This handles models that ignore JSON-only instructions and return Markdown instead.
+func parseMarkdownFallback(text string) []Issue {
+	var issues []Issue
+	lines := strings.Split(text, "\n")
+
+	var currentFile string
+	var currentTitle string
+	var currentDesc strings.Builder
+	var currentSeverity string
+	var currentLine int
+	inIssue := false
+
+	flushIssue := func() {
+		if currentTitle != "" {
+			desc := strings.TrimSpace(currentDesc.String())
+			if desc == "" {
+				desc = currentTitle
+			}
+			issues = append(issues, Issue{
+				Title:       currentTitle,
+				Description: desc,
+				File:        currentFile,
+				Line:        currentLine,
+				Severity:    currentSeverity,
+				Suggestion:  "",
+			})
+		}
+		currentTitle = ""
+		currentDesc.Reset()
+		currentSeverity = "medium"
+		currentLine = 0
+		inIssue = false
+	}
+
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+
+		// Detect file headers: "## File: `path/to/file.php`"
+		if strings.HasPrefix(trimmed, "## File:") || strings.HasPrefix(trimmed, "## File ") {
+			flushIssue()
+			currentFile = extractBacktickContent(trimmed)
+			continue
+		}
+
+		// Detect issue headers: "### Title" or "### Bug: Title"
+		if strings.HasPrefix(trimmed, "### ") {
+			flushIssue()
+			currentTitle = strings.TrimPrefix(trimmed, "### ")
+			currentSeverity = detectSeverityFromText(currentTitle)
+			inIssue = true
+			continue
+		}
+
+		// Detect severity markers in body
+		if inIssue {
+			lower := strings.ToLower(trimmed)
+			if strings.Contains(lower, "critical") || strings.Contains(lower, "🔴") {
+				currentSeverity = "high"
+			} else if strings.Contains(lower, "🟡") && currentSeverity != "high" {
+				currentSeverity = "medium"
+			} else if strings.Contains(lower, "🟢") && currentSeverity == "medium" {
+				currentSeverity = "low"
+			}
+
+			// Detect line references: "**Lines affected:** 60, 65" or "**Line 42**"
+			if currentLine == 0 && (strings.Contains(lower, "line") || strings.Contains(lower, "lines")) {
+				if n := extractFirstNumber(trimmed); n > 0 {
+					currentLine = n
+				}
+			}
+
+			if trimmed != "" && !strings.HasPrefix(trimmed, "---") && !strings.HasPrefix(trimmed, "```") && !strings.HasPrefix(trimmed, "|") {
+				currentDesc.WriteString(trimmed)
+				currentDesc.WriteString(" ")
+			}
+		}
+	}
+	flushIssue()
+
+	return issues
+}
+
+func extractBacktickContent(s string) string {
+	start := strings.Index(s, "`")
+	if start < 0 {
+		return ""
+	}
+	end := strings.Index(s[start+1:], "`")
+	if end < 0 {
+		return ""
+	}
+	return s[start+1 : start+1+end]
+}
+
+func detectSeverityFromText(title string) string {
+	lower := strings.ToLower(title)
+	if strings.Contains(lower, "critical") || strings.Contains(lower, "bug") || strings.Contains(lower, "security") || strings.Contains(lower, "vulnerability") {
+		return "high"
+	}
+	if strings.Contains(lower, "missing") || strings.Contains(lower, "unbounded") || strings.Contains(lower, "duplicate") {
+		return "medium"
+	}
+	return "medium"
+}
+
+func extractFirstNumber(s string) int {
+	num := 0
+	inNum := false
+	for _, ch := range s {
+		if ch >= '0' && ch <= '9' {
+			num = num*10 + int(ch-'0')
+			inNum = true
+		} else if inNum {
+			break
+		}
+	}
+	return num
+}
+
+// BuildDiffPrompt returns the system prompt for diff-based code review.
+func BuildDiffPrompt() string {
+	return `You are a JSON API that reviews Laravel code. You receive git diffs and respond with structured JSON only.
+
+Analyze the provided git diff. Report issues in: performance (N+1, missing eager loading), security (mass assignment, SQL injection, XSS), bad practices (fat controllers, missing Form Requests), conventions (Eloquent misuse, missing middleware).
+
+Rules: only CHANGED lines, specific file+line, severity low/medium/high, no style issues, no test files.
+
+CRITICAL: Your entire response must be valid JSON. No markdown. No explanation. No text before or after the JSON.
+
+{"issues":[{"title":"string","description":"string","file":"string","line":0,"severity":"low|medium|high","suggestion":"string"}]}
+
+Empty result: {"issues":[]}`
+}
+
+// BuildScanPrompt returns the system prompt for full codebase scan.
+func BuildScanPrompt() string {
+	return `You are a JSON API that audits Laravel code. You receive full source files and respond with structured JSON only.
+
+Analyze the provided Laravel files. Report high-impact issues in: security (mass assignment, SQL injection, XSS, hardcoded secrets), performance (N+1, missing eager loading), bad practices (fat controllers, missing Form Requests), conventions (Eloquent misuse, missing middleware).
+
+Rules: review entire file, specific file+line, severity low/medium/high, no style issues, no test files, prioritize impactful issues.
+
+CRITICAL: Your entire response must be valid JSON. No markdown. No explanation. No text before or after the JSON.
+
+{"issues":[{"title":"string","description":"string","file":"string","line":0,"severity":"low|medium|high","suggestion":"string"}]}
+
+Empty result: {"issues":[]}`
 }
 
 // truncate shortens a string to maxLen characters.

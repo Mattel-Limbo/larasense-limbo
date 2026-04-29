@@ -1,13 +1,15 @@
 # Larasense Limbo
 
-AI-powered code review CLI for Laravel projects. Analyzes git diffs and detects performance issues, security vulnerabilities, bad practices, and convention violations — using any OpenAI-compatible AI provider.
+AI-powered code review CLI for Laravel projects. Analyzes git diffs **or scans your entire codebase** to detect performance issues, security vulnerabilities, bad practices, and convention violations — using any OpenAI-compatible AI provider.
 
 ## Features
 
 - **Git Diff Analysis** — Reads `git diff` between any two refs (branches, commits, tags)
+- **Full Codebase Scan** — Audit all Laravel files in a project, not just changed ones — perfect for initial adoption or periodic audits
 - **Laravel-Aware Filtering** — Only processes `.php` and `.blade.php` files in relevant directories (`app/`, `routes/`, `resources/views/`, etc.)
 - **Smart File Classification** — Automatically identifies 18 Laravel component types (Controller, Model, Middleware, Form Request, Job, Event, etc.) and provides contextual hints to the AI
 - **Structured AI Review** — Sends diff + context to an AI provider with a strict Laravel code review prompt
+- **Token-Aware Batching** — Automatically splits large codebases into batches (~20K tokens each) to stay within AI provider limits
 - **Configurable** — YAML config file with environment variable support (`${VAR}` syntax)
 - **Dual Output** — Human-readable terminal output with severity icons, or JSON for CI pipelines
 - **CI-Ready** — Exits with code `1` when high-severity issues are found
@@ -102,12 +104,18 @@ export AI_API_KEY=sk-your-api-key-here
 3. **Run the review:**
 
 ```bash
+# Review only changed files (git diff)
 larasense-limbo analyze
+
+# Or scan the entire codebase
+larasense-limbo scan
 ```
 
 ## Usage
 
-### Basic Usage
+### Analyze (Diff-Based Review)
+
+Review only changed files between two git refs:
 
 ```bash
 # Review changes between origin/main and HEAD (default)
@@ -126,7 +134,7 @@ larasense-limbo analyze --base main --verbose
 larasense-limbo analyze --base main --head HEAD --json
 ```
 
-### CLI Flags
+#### Analyze Flags
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
@@ -137,6 +145,44 @@ larasense-limbo analyze --base main --head HEAD --json
 | `--no-cache` | bool | `false` | Skip cache and re-review all files |
 | `--format` | string | `human` | Output format: `human`, `json`, `github` |
 | `--github-pr` | string | | Post results as PR comment (format: `owner/repo#number`) |
+
+### Scan (Full Codebase Audit)
+
+Scan all Laravel files in the project — not just changed ones. Useful for:
+- **Initial adoption** — audit an existing codebase when first adopting larasense-limbo
+- **Periodic audits** — run scheduled full scans to catch accumulated technical debt
+- **Pre-release checks** — full audit before major deployments
+
+```bash
+# Scan current directory
+larasense-limbo scan
+
+# Scan a specific Laravel project
+larasense-limbo scan --path /path/to/laravel-project
+
+# Output as JSON
+larasense-limbo scan --json
+
+# Verbose mode for debugging
+larasense-limbo scan --verbose
+
+# Force re-scan (skip cache)
+larasense-limbo scan --no-cache
+```
+
+#### Scan Flags
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--path` | string | `.` | Root directory to scan |
+| `--json` | bool | `false` | Output results as JSON |
+| `--format` | string | `human` | Output format: `human`, `json`, `github` |
+| `--verbose` | bool | `false` | Show detailed AI request/response logs |
+| `--no-cache` | bool | `false` | Skip cache and re-scan all files |
+
+The scan command automatically skips `vendor/`, `node_modules/`, `.git/`, and `storage/` directories. Files are filtered using the same `include`/`exclude` glob patterns from your config.
+
+For large projects, files are automatically split into token-aware batches (~20K tokens each) to stay within AI provider limits.
 
 ### Output Examples
 
@@ -185,6 +231,10 @@ larasense-limbo analyze --base main --head HEAD --json
 ```
 
 ## Other Commands
+
+### Scan
+
+Full codebase audit — see [Scan (Full Codebase Audit)](#scan-full-codebase-audit) above for details.
 
 ### Init
 
@@ -328,14 +378,16 @@ custom_prompt: "Be extra strict. Report any method longer than 20 lines as a bad
 
 ### Cache
 
-Larasense-limbo caches review results per file using SHA-256 hashes. On subsequent runs, unchanged files are skipped — saving API calls and time.
+Larasense-limbo caches review results per file using SHA-256 hashes. On subsequent runs, unchanged files are skipped — saving API calls and time. Cache works for both `analyze` and `scan` commands.
 
 ```bash
 # Normal run (uses cache)
 larasense-limbo analyze --base main
+larasense-limbo scan
 
-# Force re-review all files
+# Force re-review/re-scan all files
 larasense-limbo analyze --base main --no-cache
+larasense-limbo scan --no-cache
 ```
 
 Cache is stored in `.larasense-limbo-cache.json` (auto-added to `.gitignore`).
@@ -458,6 +510,7 @@ larasense-limbo/
 ├── cmd/
 │   ├── root.go                      # Root CLI command
 │   ├── analyze.go                   # analyze subcommand + flags
+│   ├── scan.go                      # scan subcommand (full codebase audit)
 │   ├── init.go                      # init subcommand (config generator)
 │   └── version.go                   # version subcommand (build info)
 ├── internal/
@@ -465,8 +518,11 @@ larasense-limbo/
 │   ├── git/git.go                   # Git operations (exec)
 │   ├── diff/parser.go               # Git diff parser
 │   ├── context/builder.go           # Laravel-aware context builder
+│   ├── scanner/scanner.go           # Filesystem walker for full codebase scan
 │   ├── ai/client.go                 # AI provider HTTP client
-│   ├── reviewer/reviewer.go         # Pipeline orchestrator
+│   ├── reviewer/
+│   │   ├── reviewer.go              # Pipeline orchestrator (diff + scan)
+│   │   └── batcher.go               # Token-aware file batching
 │   └── output/formatter.go          # Human + JSON + GitHub annotations output
 ├── .larasense-limbo.yml             # Example config
 ├── Dockerfile                       # Multi-stage container build
@@ -478,6 +534,8 @@ larasense-limbo/
 ```
 
 ### Data Flow
+
+**Analyze (diff-based):**
 
 ```
 larasense-limbo analyze
@@ -493,14 +551,35 @@ larasense-limbo analyze
   │   ├─ classifyFile()               Identify component type (18 types)
   │   ├─ generateHint()               AI context hint per type
   │   └─ git.GetSurroundingLines()    Fetch ±20 lines around changes
+  │                                         │
+  └───────────────────────────────────────── ▼ ── shared pipeline ──
+                                      reviewer.review()
+                                        ├─ filterCached()          Skip unchanged files
+                                        ├─ batchFiles()            Split into token-aware batches
+                                        ├─ analyzeInBatches()      Send each batch to AI
+                                        ├─ filterIssues()          Severity threshold + max count
+                                        └─ output.Format*()        Human / JSON / GitHub
+```
+
+**Scan (full codebase):**
+
+```
+larasense-limbo scan
   │
-  ├─ ai.Client.Analyze(diff, ctx)     HTTP POST to AI provider
-  │   ├─ Retry (3x, exponential)      2s → 4s backoff
-  │   └─ extractContent()             Parse multi-format response
+  ├─ config.Load()                    Load .larasense-limbo.yml + env vars
   │
-  ├─ filterIssues()                   Apply severity threshold + max count
-  │
-  └─ output.Format*()                 Human-readable or JSON
+  ├─ scanner.Scan(rootDir)            Walk filesystem, read all matching files
+  │   ├─ ShouldIncludeFile()          Same glob filters as analyze
+  │   ├─ ClassifyFile()               Same 18 Laravel types
+  │   └─ skip vendor/node_modules     Auto-skip irrelevant directories
+  │                                         │
+  └───────────────────────────────────────── ▼ ── shared pipeline ──
+                                      reviewer.review()
+                                        ├─ filterCached()
+                                        ├─ batchFiles()
+                                        ├─ analyzeInBatches()
+                                        ├─ filterIssues()
+                                        └─ output.Format*()
 ```
 
 ## Development

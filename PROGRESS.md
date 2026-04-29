@@ -71,20 +71,30 @@ Status tracking untuk fitur-fitur larasense-limbo.
 | 39 | Config init command | ✅ Done | `larasense-limbo init` + `--force` flag, generate config template |
 | 40 | Version command | ✅ Done | `larasense-limbo version`, build info via `-ldflags` |
 
+## New Features
+
+| # | Fitur | Status | Catatan |
+|---|-------|--------|---------|
+| 41 | Full codebase scan command | ✅ Done | `larasense-limbo scan`, filesystem walker, dedicated AI prompt, token-aware batching |
+| 42 | Scanner module | ✅ Done | `internal/scanner/scanner.go`, walks filesystem, skips vendor/node_modules/storage/.git |
+| 43 | Token-aware batching | ✅ Done | `internal/reviewer/batcher.go`, ~80KB per batch (~20K tokens), oversized files get own batch |
+| 44 | Scan-specific AI prompt | ✅ Done | `BuildScanPrompt()`, optimized for full-file review (shorter than diff prompt, same JSON output) |
+| 45 | Shared review pipeline | ✅ Done | Refactored `reviewer.go`: `review()` shared by `Run()` and `RunScan()`, `analyzeInBatches()` |
+
 ## Future Ideas
 
 | # | Fitur | Status | Catatan |
 |---|-------|--------|---------|
-| 41 | Auto-fix suggestions | 💡 Future | Generate patch files dari AI suggestions |
-| 42 | Multi-language support | 💡 Future | Vue/JS files di Laravel project |
-| 43 | Rule customization | 💡 Future | Enable/disable specific rule categories |
-| 44 | Baseline support | 💡 Future | Ignore existing issues, hanya report baru |
-| 45 | SARIF output | 💡 Future | Standard format untuk security tools |
-| 46 | VS Code extension | 💡 Future | Real-time review di editor |
-| 47 | Pre-commit hook | 💡 Future | Review otomatis sebelum commit |
-| 48 | Team config sharing | 💡 Future | Shared config via package registry |
-| 49 | Review history/analytics | 💡 Future | Track issue trends over time |
-| 50 | Plugin system | 💡 Future | Custom analyzers via Go plugins |
+| 46 | Auto-fix suggestions | 💡 Future | Generate patch files dari AI suggestions |
+| 47 | Multi-language support | 💡 Future | Vue/JS files di Laravel project |
+| 48 | Rule customization | 💡 Future | Enable/disable specific rule categories |
+| 49 | Baseline support | 💡 Future | Ignore existing issues, hanya report baru |
+| 50 | SARIF output | 💡 Future | Standard format untuk security tools |
+| 51 | VS Code extension | 💡 Future | Real-time review di editor |
+| 52 | Pre-commit hook | 💡 Future | Review otomatis sebelum commit |
+| 53 | Team config sharing | 💡 Future | Shared config via package registry |
+| 54 | Review history/analytics | 💡 Future | Track issue trends over time |
+| 55 | Plugin system | 💡 Future | Custom analyzers via Go plugins |
 
 ---
 
@@ -97,5 +107,6 @@ Status tracking untuk fitur-fitur larasense-limbo.
 | Testing | 8 | 0 | 0 |
 | CI/CD | 4 | 0 | 0 |
 | Planned Features | 8 | 0 | 0 |
+| New Features | 5 | 0 | 0 |
 | Future Ideas | 0 | 0 | 10 |
-| **Total** | **40** | **0** | **10** |
+| **Total** | **45** | **0** | **10** |
