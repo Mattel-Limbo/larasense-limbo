@@ -83,24 +83,25 @@ func (b *Builder) Build(files []diff.FileDiff) (*ReviewContext, error) {
 	return ctx, nil
 }
 
-// shouldInclude checks if a file path matches the configured include/exclude filters
-// and is a Laravel-relevant file.
 func (b *Builder) shouldInclude(path string) bool {
-	// Must be a PHP or Blade file
+	return ShouldIncludeFile(path, b.cfg)
+}
+
+// ShouldIncludeFile checks if a file path matches the configured include/exclude filters
+// and is a Laravel-relevant file.
+func ShouldIncludeFile(path string, cfg *config.Config) bool {
 	if !isLaravelFile(path) {
 		return false
 	}
 
-	// Check exclude patterns first
-	for _, pattern := range b.cfg.Filters.Exclude {
+	for _, pattern := range cfg.Filters.Exclude {
 		if matchGlob(pattern, path) {
 			return false
 		}
 	}
 
-	// If include patterns are defined, file must match at least one
-	if len(b.cfg.Filters.Include) > 0 {
-		for _, pattern := range b.cfg.Filters.Include {
+	if len(cfg.Filters.Include) > 0 {
+		for _, pattern := range cfg.Filters.Include {
 			if matchGlob(pattern, path) {
 				return true
 			}
@@ -145,7 +146,11 @@ func isLaravelFile(path string) bool {
 	return false
 }
 
-// classifyFile determines the Laravel component type of a file.
+// ClassifyFile determines the Laravel component type of a file.
+func ClassifyFile(path string) string {
+	return classifyFile(path)
+}
+
 func classifyFile(path string) string {
 	normalizedPath := filepath.ToSlash(path)
 
@@ -189,6 +194,11 @@ func classifyFile(path string) string {
 	default:
 		return "php"
 	}
+}
+
+// GenerateHint produces a contextual hint for the AI about what this file type is.
+func GenerateHint(path string) string {
+	return generateHint(path)
 }
 
 // generateHint produces a concise keyword-based hint for the AI about what to check.
@@ -246,7 +256,7 @@ func matchGlob(pattern, path string) bool {
 	return matched
 }
 
-// FormatForAI converts the ReviewContext into a string suitable for AI prompt input.
+// FormatForAI converts the ReviewContext into a string suitable for diff-based AI prompt input.
 func (rc *ReviewContext) FormatForAI() string {
 	var sb strings.Builder
 
@@ -266,6 +276,22 @@ func (rc *ReviewContext) FormatForAI() string {
 		}
 
 		sb.WriteString("Changes (diff):\n")
+		sb.WriteString(f.DiffText)
+	}
+
+	return sb.String()
+}
+
+// FormatForScan converts the ReviewContext into a string for full-file scan AI prompt input.
+func (rc *ReviewContext) FormatForScan() string {
+	var sb strings.Builder
+
+	for i, f := range rc.Files {
+		if i > 0 {
+			sb.WriteString("\n---\n\n")
+		}
+
+		fmt.Fprintf(&sb, "File: %s [%s]\n", f.Path, f.Type)
 		sb.WriteString(f.DiffText)
 	}
 

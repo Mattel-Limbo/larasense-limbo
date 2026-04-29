@@ -138,17 +138,77 @@ func TestExtractContent_ResponsesAPI(t *testing.T) {
 	}
 }
 
-func TestBuildPrompt(t *testing.T) {
-	prompt := buildPrompt()
+func TestBuildDiffPrompt(t *testing.T) {
+	prompt := BuildDiffPrompt()
 	if prompt == "" {
 		t.Error("expected non-empty prompt")
 	}
-	// Should contain key review focus areas (compressed prompt uses these terms)
+	// Should contain key review focus areas
 	keywords := []string{"N+1", "mass assignment", "fat controllers", "severity", "JSON"}
 	for _, kw := range keywords {
 		if !containsStr(prompt, kw) {
-			t.Errorf("prompt should contain %q", kw)
+			t.Errorf("diff prompt should contain %q", kw)
 		}
+	}
+}
+
+func TestBuildScanPrompt(t *testing.T) {
+	prompt := BuildScanPrompt()
+	if prompt == "" {
+		t.Error("expected non-empty prompt")
+	}
+	keywords := []string{"audits Laravel code", "entire file", "severity", "JSON"}
+	for _, kw := range keywords {
+		if !containsStr(prompt, kw) {
+			t.Errorf("scan prompt should contain %q", kw)
+		}
+	}
+}
+
+func TestParseMarkdownFallback(t *testing.T) {
+	markdown := `# Code Review
+
+## File: ` + "`app/Console/Commands/SyncIdCardWithNpwpDocument.php`" + `
+
+### Bug: Undefined Variable
+
+**Severity: Critical**
+
+**Lines affected:** 60, 65, 70
+
+The variable $businessAccount is used but was never defined.
+
+---
+
+## File: ` + "`app/Console/Commands/GeneratePOSAccountCommand.php`" + `
+
+### Unbounded Query
+
+**Severity: Medium**
+
+This fetches every business account with no filter.`
+
+	issues := parseMarkdownFallback(markdown)
+
+	if len(issues) != 2 {
+		t.Fatalf("expected 2 issues from markdown, got %d", len(issues))
+	}
+
+	if issues[0].File != "app/Console/Commands/SyncIdCardWithNpwpDocument.php" {
+		t.Errorf("issue 0 file = %q", issues[0].File)
+	}
+	if issues[0].Severity != "high" {
+		t.Errorf("issue 0 severity = %q, want 'high'", issues[0].Severity)
+	}
+	if issues[0].Line != 60 {
+		t.Errorf("issue 0 line = %d, want 60", issues[0].Line)
+	}
+
+	if issues[1].File != "app/Console/Commands/GeneratePOSAccountCommand.php" {
+		t.Errorf("issue 1 file = %q", issues[1].File)
+	}
+	if issues[1].Severity != "medium" {
+		t.Errorf("issue 1 severity = %q, want 'medium'", issues[1].Severity)
 	}
 }
 

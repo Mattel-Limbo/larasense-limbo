@@ -179,7 +179,7 @@ func TestBuildSummary_WithIssues(t *testing.T) {
 		{Severity: "low"},
 	}
 
-	summary := buildSummary(issues, 5)
+	summary := buildSummary(issues, 5, "diff")
 
 	expected := "Reviewed 5 file(s). Found 4 issue(s): 1 high, 2 medium, 1 low."
 	if summary != expected {
@@ -188,7 +188,7 @@ func TestBuildSummary_WithIssues(t *testing.T) {
 }
 
 func TestBuildSummary_NoIssues(t *testing.T) {
-	summary := buildSummary(nil, 3)
+	summary := buildSummary(nil, 3, "diff")
 
 	expected := "Reviewed 3 file(s). No issues found. Great job!"
 	if summary != expected {
@@ -202,7 +202,7 @@ func TestBuildSummary_AllHigh(t *testing.T) {
 		{Severity: "high"},
 	}
 
-	summary := buildSummary(issues, 1)
+	summary := buildSummary(issues, 1, "diff")
 
 	expected := "Reviewed 1 file(s). Found 2 issue(s): 2 high, 0 medium, 0 low."
 	if summary != expected {
@@ -215,9 +215,31 @@ func TestBuildSummary_UnknownSeverityCountsAsLow(t *testing.T) {
 		{Severity: "critical"},
 	}
 
-	summary := buildSummary(issues, 1)
+	summary := buildSummary(issues, 1, "diff")
 
 	expected := "Reviewed 1 file(s). Found 1 issue(s): 0 high, 0 medium, 1 low."
+	if summary != expected {
+		t.Errorf("buildSummary() = %q, want %q", summary, expected)
+	}
+}
+
+func TestBuildSummary_ScanMode(t *testing.T) {
+	issues := []Issue{
+		{Severity: "high"},
+	}
+
+	summary := buildSummary(issues, 10, "scan")
+
+	expected := "Scanned 10 file(s). Found 1 issue(s): 1 high, 0 medium, 0 low."
+	if summary != expected {
+		t.Errorf("buildSummary() = %q, want %q", summary, expected)
+	}
+}
+
+func TestBuildSummary_ScanNoIssues(t *testing.T) {
+	summary := buildSummary(nil, 5, "scan")
+
+	expected := "Scanned 5 file(s). No issues found. Great job!"
 	if summary != expected {
 		t.Errorf("buildSummary() = %q, want %q", summary, expected)
 	}

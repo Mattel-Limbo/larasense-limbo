@@ -193,6 +193,41 @@ func TestAnalyzeCommand_Flags(t *testing.T) {
 	}
 }
 
+func TestScanCommand_Flags(t *testing.T) {
+	f := scanCmd.Flags()
+
+	pathFlag := f.Lookup("path")
+	if pathFlag == nil {
+		t.Fatal("--path flag not registered")
+	}
+	if pathFlag.DefValue != "." {
+		t.Errorf("--path default = %q, want '.'", pathFlag.DefValue)
+	}
+
+	jsonFlag := f.Lookup("json")
+	if jsonFlag == nil {
+		t.Fatal("--json flag not registered")
+	}
+
+	formatFlag := f.Lookup("format")
+	if formatFlag == nil {
+		t.Fatal("--format flag not registered")
+	}
+	if formatFlag.DefValue != "human" {
+		t.Errorf("--format default = %q, want 'human'", formatFlag.DefValue)
+	}
+
+	verboseFlag := f.Lookup("verbose")
+	if verboseFlag == nil {
+		t.Fatal("--verbose flag not registered")
+	}
+
+	noCacheFlag := f.Lookup("no-cache")
+	if noCacheFlag == nil {
+		t.Fatal("--no-cache flag not registered")
+	}
+}
+
 func TestRootCommand_HasSubcommands(t *testing.T) {
 	commands := rootCmd.Commands()
 
@@ -200,6 +235,7 @@ func TestRootCommand_HasSubcommands(t *testing.T) {
 		"analyze": false,
 		"init":    false,
 		"version": false,
+		"scan":    false,
 	}
 
 	for _, cmd := range commands {
