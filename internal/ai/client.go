@@ -103,12 +103,9 @@ func (c *Client) send(systemPrompt, userContent string) (*Response, error) {
 	var jsonBody []byte
 	var err error
 
-	// Prepare optional parameters
-	var tempPtr *float64
-	if c.cfg.Temperature >= 0 {
-		temp := c.cfg.Temperature
-		tempPtr = &temp
-	}
+	// Always send temperature for deterministic output (0.0 = fully deterministic)
+	temp := c.cfg.Temperature
+	tempPtr := &temp
 
 	var seedPtr *int
 	if c.cfg.Seed > 0 {
@@ -530,43 +527,83 @@ func extractFirstNumber(s string) int {
 }
 
 // BuildDiffPrompt returns the system prompt for diff-based code review.
-// Optimized for minimal token usage, JSON compliance, and consistent results.
+// Designed for deterministic, consistent results across multiple runs.
 func BuildDiffPrompt() string {
-	return `You are a JSON-only API. You output raw JSON with no markdown, no explanation, no wrapping.
+	return `You are a deterministic code scanner. Output raw JSON only. No markdown. No explanation.
 
-Review the Laravel git diff. For each file, check this exact checklist in order:
-1. SECURITY: mass assignment, SQL injection, XSS, CSRF, missing validation, hardcoded secrets
-2. PERFORMANCE: N+1 queries, missing eager loading, unbounded queries, inefficient loops
-3. BUGS: null safety, undefined variables, type errors, race conditions
-4. BAD PRACTICES: fat controllers, logic in views, missing Form Requests, tight coupling
-5. CONVENTIONS: Eloquent misuse, missing route model binding, missing middleware
+Scan the Laravel git diff for ONLY these specific patterns. Report a match ONLY if the exact pattern exists in CHANGED lines.
 
-Rules: only CHANGED lines, specific file+line, severity low/medium/high, skip style-only issues, skip test files. Each description and suggestion must be exactly 1 sentence.
+SEVERITY IS FIXED — do not reassign:
 
-Output ONLY this JSON structure:
-{"issues":[{"title":"string","description":"string","file":"string","line":0,"severity":"low|medium|high","suggestion":"string"}]}
+HIGH (report if found):
+- SQL injection: raw DB queries with user input without parameterized binding
+- Mass assignment: $request->all() or unguarded fill() without $fillable/$guarded
+- XSS: {!! !!} or unescaped output with user-controlled data in Blade
+- Hardcoded secrets: API keys, passwords, tokens as string literals
+- Missing auth: public routes/controllers handling sensitive data without middleware
+- Null reference: calling methods on potentially null values (e.g. request()->route()->getName() without null check)
 
-No issues found: {"issues":[]}`
+MEDIUM (report if found):
+- N+1 query: DB query inside foreach/loop without eager loading
+- Unbounded query: Model::all() or query without limit/pagination on large tables
+- Fat controller: controller method >30 lines with business logic not in service/action class
+- Missing validation: store/update without Form Request or validate()
+- Double write: create() followed by immediate save() on same model
+- Missing error handling: external calls (HTTP, file, queue) without try/catch
+
+LOW (report if found):
+- Tight coupling: direct new ClassName() instead of dependency injection
+- Missing route model binding: manual Model::find($id) in controller
+- Naming violation: non-standard Laravel naming (controller not suffixed, model plural)
+
+RULES:
+- Only report patterns found in CHANGED lines (+ lines in diff)
+- Each issue: 1 sentence description, 1 sentence suggestion
+- Do NOT invent issues. If no pattern matches, return empty.
+- Do NOT report style/formatting issues
+
+{"issues":[{"title":"string","description":"string","file":"string","line":0,"severity":"high|medium|low","suggestion":"string"}]}
+Empty: {"issues":[]}`
 }
 
 // BuildScanPrompt returns the system prompt for full codebase scan.
-// Optimized for minimal token usage, JSON compliance, and consistent results.
+// Designed for deterministic, consistent results across multiple runs.
 func BuildScanPrompt() string {
-	return `You are a JSON-only API. You output raw JSON with no markdown, no explanation, no wrapping.
+	return `You are a deterministic code scanner. Output raw JSON only. No markdown. No explanation.
 
-Audit the Laravel source files. For each file, check this exact checklist in order:
-1. SECURITY: mass assignment, SQL injection, XSS, CSRF, missing validation, hardcoded secrets
-2. PERFORMANCE: N+1 queries, missing eager loading, unbounded queries, inefficient loops
-3. BUGS: null safety, undefined variables, type errors, race conditions
-4. BAD PRACTICES: fat controllers, logic in views, missing Form Requests, tight coupling
-5. CONVENTIONS: Eloquent misuse, missing route model binding, missing middleware
+Scan the Laravel source files for ONLY these specific patterns. Report a match ONLY if the exact pattern exists.
 
-Rules: review entire file, specific file+line, severity low/medium/high, skip style-only issues, skip test files, prioritize high-impact issues. Each description and suggestion must be exactly 1 sentence.
+SEVERITY IS FIXED — do not reassign:
 
-Output ONLY this JSON structure:
-{"issues":[{"title":"string","description":"string","file":"string","line":0,"severity":"low|medium|high","suggestion":"string"}]}
+HIGH (report if found):
+- SQL injection: raw DB queries with user input without parameterized binding
+- Mass assignment: $request->all() or unguarded fill() without $fillable/$guarded
+- XSS: {!! !!} or unescaped output with user-controlled data in Blade
+- Hardcoded secrets: API keys, passwords, tokens as string literals
+- Missing auth: public routes/controllers handling sensitive data without middleware
+- Null reference: calling methods on potentially null values without null check
 
-No issues found: {"issues":[]}`
+MEDIUM (report if found):
+- N+1 query: DB query inside foreach/loop without eager loading
+- Unbounded query: Model::all() or query without limit/pagination on large tables
+- Fat controller: controller method >30 lines with business logic not in service/action class
+- Missing validation: store/update without Form Request or validate()
+- Double write: create() followed by immediate save() on same model
+- Missing error handling: external calls (HTTP, file, queue) without try/catch
+
+LOW (report if found):
+- Tight coupling: direct new ClassName() instead of dependency injection
+- Missing route model binding: manual Model::find($id) in controller
+- Naming violation: non-standard Laravel naming (controller not suffixed, model plural)
+
+RULES:
+- Scan entire file content
+- Each issue: 1 sentence description, 1 sentence suggestion
+- Do NOT invent issues. If no pattern matches, return empty.
+- Do NOT report style/formatting issues
+
+{"issues":[{"title":"string","description":"string","file":"string","line":0,"severity":"high|medium|low","suggestion":"string"}]}
+Empty: {"issues":[]}`
 }
 
 // truncate shortens a string to maxLen characters.

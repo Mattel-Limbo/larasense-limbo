@@ -23,7 +23,7 @@ type ProviderConfig struct {
 	Model       string  `mapstructure:"model"`
 	Endpoint    string  `mapstructure:"endpoint"`    // "chat" or "responses" (default: "chat")
 	MaxTokens   int     `mapstructure:"max_tokens"`  // Max completion tokens (default: 1024, 0 = no limit)
-	Temperature float64 `mapstructure:"temperature"` // Sampling temperature (default: 0.1, lower = more consistent)
+	Temperature float64 `mapstructure:"temperature"` // Sampling temperature (default: 0.0 = fully deterministic)
 	Seed        int     `mapstructure:"seed"`        // Fixed seed for reproducible results (default: 42, 0 = random)
 }
 
@@ -84,7 +84,7 @@ func DefaultConfig() *Config {
 			Model:       "gpt-4.1",
 			Endpoint:    "chat",
 			MaxTokens:   1024,
-			Temperature: 0.1,
+			Temperature: 0.0,
 			Seed:        42,
 		},
 		Review: ReviewConfig{
