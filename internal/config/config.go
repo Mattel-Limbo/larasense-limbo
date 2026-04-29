@@ -23,7 +23,8 @@ type ProviderConfig struct {
 	Model       string  `mapstructure:"model"`
 	Endpoint    string  `mapstructure:"endpoint"`    // "chat" or "responses" (default: "chat")
 	MaxTokens   int     `mapstructure:"max_tokens"`  // Max completion tokens (default: 1024, 0 = no limit)
-	Temperature float64 `mapstructure:"temperature"` // Sampling temperature (default: 0.3)
+	Temperature float64 `mapstructure:"temperature"` // Sampling temperature (default: 0.1, lower = more consistent)
+	Seed        int     `mapstructure:"seed"`        // Fixed seed for reproducible results (default: 42, 0 = random)
 }
 
 // providerPreset holds default settings for known AI providers.
@@ -83,7 +84,8 @@ func DefaultConfig() *Config {
 			Model:       "gpt-4.1",
 			Endpoint:    "chat",
 			MaxTokens:   1024,
-			Temperature: 0.3,
+			Temperature: 0.1,
+			Seed:        42,
 		},
 		Review: ReviewConfig{
 			MaxIssues:         5,
@@ -114,6 +116,7 @@ func Load() (*Config, error) {
 	v.SetDefault("provider.endpoint", defaults.Provider.Endpoint)
 	v.SetDefault("provider.max_tokens", defaults.Provider.MaxTokens)
 	v.SetDefault("provider.temperature", defaults.Provider.Temperature)
+	v.SetDefault("provider.seed", defaults.Provider.Seed)
 	v.SetDefault("review.max_issues", defaults.Review.MaxIssues)
 	v.SetDefault("review.severity_threshold", defaults.Review.SeverityThreshold)
 	v.SetDefault("review.context_lines", defaults.Review.ContextLines)

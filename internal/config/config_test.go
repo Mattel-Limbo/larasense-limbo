@@ -18,8 +18,11 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.Provider.MaxTokens != 1024 {
 		t.Errorf("expected default max_tokens 1024, got %d", cfg.Provider.MaxTokens)
 	}
-	if cfg.Provider.Temperature != 0.3 {
-		t.Errorf("expected default temperature 0.3, got %f", cfg.Provider.Temperature)
+	if cfg.Provider.Temperature != 0.1 {
+		t.Errorf("expected default temperature 0.1, got %f", cfg.Provider.Temperature)
+	}
+	if cfg.Provider.Seed != 42 {
+		t.Errorf("expected default seed 42, got %d", cfg.Provider.Seed)
 	}
 	if cfg.Review.MaxIssues != 5 {
 		t.Errorf("expected default max_issues 5, got %d", cfg.Review.MaxIssues)

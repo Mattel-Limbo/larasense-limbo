@@ -37,12 +37,19 @@ func NewClient(cfg *config.ProviderConfig, verbose bool) *Client {
 	}
 }
 
+// responseFormat enforces JSON output from the AI provider.
+type responseFormat struct {
+	Type string `json:"type"`
+}
+
 // chatRequest is the payload for /v1/chat/completions endpoint.
 type chatRequest struct {
-	Model       string        `json:"model"`
-	Messages    []chatMessage `json:"messages"`
-	MaxTokens   int           `json:"max_tokens,omitempty"`
-	Temperature *float64      `json:"temperature,omitempty"`
+	Model          string          `json:"model"`
+	Messages       []chatMessage   `json:"messages"`
+	MaxTokens      int             `json:"max_tokens,omitempty"`
+	Temperature    *float64        `json:"temperature,omitempty"`
+	Seed           *int            `json:"seed,omitempty"`
+	ResponseFormat *responseFormat `json:"response_format,omitempty"`
 }
 
 // chatMessage represents a single message in the chat format.
@@ -58,6 +65,7 @@ type responsesRequest struct {
 	Input        string   `json:"input"`
 	MaxTokens    int      `json:"max_output_tokens,omitempty"`
 	Temperature  *float64 `json:"temperature,omitempty"`
+	Seed         *int     `json:"seed,omitempty"`
 }
 
 // Response is the parsed response from the AI provider.
@@ -97,9 +105,41 @@ func (c *Client) send(systemPrompt, userContent string) (*Response, error) {
 
 	// Prepare optional parameters
 	var tempPtr *float64
-	if c.cfg.Temperature > 0 {
+	if c.cfg.Temperature >= 0 {
 		temp := c.cfg.Temperature
 		tempPtr = &temp
+	}
+
+	var seedPtr *int
+	if c.cfg.Seed > 0 {
+		seed := c.cfg.Seed
+		seedPtr = &seed
+	}
+
+	// Calculate effective max_tokens: use configured value, but cap based on
+	// estimated prompt size to avoid wasting budget on overly verbose responses.
+	effectiveMaxTokens := c.cfg.MaxTokens
+	if effectiveMaxTokens > 0 {
+		// Estimate prompt tokens (~4 chars per token)
+		promptChars := len(systemPrompt) + len(userContent)
+		estimatedPromptTokens := promptChars / 4
+
+		// If prompt is large, reduce completion budget proportionally
+		// to encourage concise output within the user's max_tokens limit
+		if estimatedPromptTokens > 2000 && effectiveMaxTokens > 512 {
+			// Scale down: large prompts need less verbose responses
+			scaledMax := effectiveMaxTokens * 2000 / estimatedPromptTokens
+			if scaledMax < 512 {
+				scaledMax = 512 // minimum floor
+			}
+			if scaledMax < effectiveMaxTokens {
+				effectiveMaxTokens = scaledMax
+				if c.verbose {
+					log.Printf("[VERBOSE] Scaled max_tokens from %d to %d (prompt ~%d tokens)",
+						c.cfg.MaxTokens, effectiveMaxTokens, estimatedPromptTokens)
+				}
+			}
+		}
 	}
 
 	endpoint := strings.ToLower(c.cfg.Endpoint)
@@ -108,8 +148,9 @@ func (c *Client) send(systemPrompt, userContent string) (*Response, error) {
 			Model:        c.cfg.Model,
 			Instructions: systemPrompt,
 			Input:        userContent,
-			MaxTokens:    c.cfg.MaxTokens,
+			MaxTokens:    effectiveMaxTokens,
 			Temperature:  tempPtr,
+			Seed:         seedPtr,
 		}
 		jsonBody, err = json.Marshal(reqBody)
 	} else {
@@ -120,8 +161,10 @@ func (c *Client) send(systemPrompt, userContent string) (*Response, error) {
 				{Role: "system", Content: systemPrompt},
 				{Role: "user", Content: userContent},
 			},
-			MaxTokens:   c.cfg.MaxTokens,
-			Temperature: tempPtr,
+			MaxTokens:      effectiveMaxTokens,
+			Temperature:    tempPtr,
+			Seed:           seedPtr,
+			ResponseFormat: &responseFormat{Type: "json_object"},
 		}
 		jsonBody, err = json.Marshal(reqBody)
 	}
@@ -487,35 +530,43 @@ func extractFirstNumber(s string) int {
 }
 
 // BuildDiffPrompt returns the system prompt for diff-based code review.
-// Optimized for minimal token usage while preserving review quality.
+// Optimized for minimal token usage, JSON compliance, and consistent results.
 func BuildDiffPrompt() string {
-	return `You are a JSON API that reviews Laravel code. You receive git diffs and respond with structured JSON only.
+	return `You are a JSON-only API. You output raw JSON with no markdown, no explanation, no wrapping.
 
-Analyze the provided git diff. Report issues in: performance (N+1, missing eager loading), security (mass assignment, SQL injection, XSS), bad practices (fat controllers, missing Form Requests), conventions (Eloquent misuse, missing middleware).
+Review the Laravel git diff. For each file, check this exact checklist in order:
+1. SECURITY: mass assignment, SQL injection, XSS, CSRF, missing validation, hardcoded secrets
+2. PERFORMANCE: N+1 queries, missing eager loading, unbounded queries, inefficient loops
+3. BUGS: null safety, undefined variables, type errors, race conditions
+4. BAD PRACTICES: fat controllers, logic in views, missing Form Requests, tight coupling
+5. CONVENTIONS: Eloquent misuse, missing route model binding, missing middleware
 
-Rules: only CHANGED lines, specific file+line, severity low/medium/high, no style issues, no test files. Keep description and suggestion each to 1 sentence max.
+Rules: only CHANGED lines, specific file+line, severity low/medium/high, skip style-only issues, skip test files. Each description and suggestion must be exactly 1 sentence.
 
-CRITICAL: Your entire response must be valid JSON. No markdown. No explanation. No text before or after the JSON.
-
+Output ONLY this JSON structure:
 {"issues":[{"title":"string","description":"string","file":"string","line":0,"severity":"low|medium|high","suggestion":"string"}]}
 
-Empty result: {"issues":[]}`
+No issues found: {"issues":[]}`
 }
 
 // BuildScanPrompt returns the system prompt for full codebase scan.
-// Optimized for minimal token usage while preserving review quality.
+// Optimized for minimal token usage, JSON compliance, and consistent results.
 func BuildScanPrompt() string {
-	return `You are a JSON API that audits Laravel code. You receive full source files and respond with structured JSON only.
+	return `You are a JSON-only API. You output raw JSON with no markdown, no explanation, no wrapping.
 
-Analyze the provided Laravel files. Report high-impact issues in: security (mass assignment, SQL injection, XSS, hardcoded secrets), performance (N+1, missing eager loading), bad practices (fat controllers, missing Form Requests), conventions (Eloquent misuse, missing middleware).
+Audit the Laravel source files. For each file, check this exact checklist in order:
+1. SECURITY: mass assignment, SQL injection, XSS, CSRF, missing validation, hardcoded secrets
+2. PERFORMANCE: N+1 queries, missing eager loading, unbounded queries, inefficient loops
+3. BUGS: null safety, undefined variables, type errors, race conditions
+4. BAD PRACTICES: fat controllers, logic in views, missing Form Requests, tight coupling
+5. CONVENTIONS: Eloquent misuse, missing route model binding, missing middleware
 
-Rules: review entire file, specific file+line, severity low/medium/high, no style issues, no test files, prioritize impactful issues. Keep description and suggestion each to 1 sentence max.
+Rules: review entire file, specific file+line, severity low/medium/high, skip style-only issues, skip test files, prioritize high-impact issues. Each description and suggestion must be exactly 1 sentence.
 
-CRITICAL: Your entire response must be valid JSON. No markdown. No explanation. No text before or after the JSON.
-
+Output ONLY this JSON structure:
 {"issues":[{"title":"string","description":"string","file":"string","line":0,"severity":"low|medium|high","suggestion":"string"}]}
 
-Empty result: {"issues":[]}`
+No issues found: {"issues":[]}`
 }
 
 // truncate shortens a string to maxLen characters.
