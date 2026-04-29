@@ -354,6 +354,155 @@ provider:
 
 You can override any preset field — e.g., `name: openai` with `model: gpt-4o` uses OpenAI's URL but a different model.
 
+### Recommended Models
+
+Not all models perform equally for code review. Here are tested recommendations ranked by **consistency and accuracy**:
+
+#### Tier 1 — Best (Recommended for Production)
+
+| Provider | Model | Why | Cost |
+|----------|-------|-----|------|
+| OpenAI | `gpt-4.1` | Best JSON compliance, follows structured prompts precisely, very consistent results across runs | Medium |
+| Anthropic | `claude-sonnet-4-20250514` | Excellent code understanding, strong at detecting security issues, reliable JSON output | Medium |
+| Google | `gemini-2.5-flash` | Fast, cheap, good JSON compliance, great for high-volume CI/CD pipelines | Low |
+
+#### Tier 2 — Good (Suitable for Development)
+
+| Provider | Model | Why | Cost |
+|----------|-------|-----|------|
+| OpenAI | `gpt-4o` | Good balance of speed and quality, slightly less consistent than gpt-4.1 | Medium |
+| OpenAI | `gpt-4o-mini` | Budget-friendly, acceptable quality for non-critical reviews | Low |
+| Ollama | `llama3.1` / `codellama` | Free, runs locally, but less consistent JSON output — may need `--no-cache` more often | Free |
+
+#### Tier 3 — Use with Caution
+
+| Provider | Model | Why | Cost |
+|----------|-------|-----|------|
+| Any | `claude-opus-*` | Very thorough but tends to ignore JSON-only instructions and return Markdown instead, causing higher token usage | High |
+| Any | Small models (<7B) | Inconsistent severity ratings, often miss issues or hallucinate false positives | Free/Low |
+
+> **Tip:** When using OpenRouter, prefix the model name with the provider — e.g., `openai/gpt-4.1`, `anthropic/claude-sonnet-4-20250514`, `google/gemini-2.5-flash`.
+
+### Best Practice Configuration
+
+The default configuration works well for most projects. Below are optimized configurations for specific use cases.
+
+#### Production CI/CD (Maximum Consistency)
+
+Use this when you need **identical results across runs** — critical for CI gates and automated PR reviews:
+
+```yaml
+provider:
+  name: openai
+  api_key: ${AI_API_KEY}
+  model: gpt-4.1
+  max_tokens: 1024        # Cap output to prevent verbose responses
+  temperature: 0.0         # Fully deterministic — zero randomness
+  seed: 42                 # Fixed seed for reproducible results
+
+review:
+  max_issues: 10
+  severity_threshold: medium
+  context_lines: 10
+
+filters:
+  include:
+    - "app/**"
+    - "routes/**"
+    - "resources/views/**"
+    - "config/**"
+    - "database/migrations/**"
+  exclude:
+    - "tests/**"
+    - "database/seeders/**"
+    - "database/factories/**"
+```
+
+**Why this works:**
+- `temperature: 0.0` eliminates sampling randomness — the model always picks the most probable token
+- `seed: 42` ensures the same random state across requests (supported by OpenAI, some other providers)
+- `max_tokens: 1024` prevents the AI from writing overly verbose descriptions that waste tokens
+- `gpt-4.1` has the best JSON compliance among tested models
+
+#### Budget-Friendly (High Volume)
+
+For teams running reviews on every commit or large monorepos:
+
+```yaml
+provider:
+  name: gemini
+  api_key: ${GEMINI_API_KEY}
+  model: gemini-2.5-flash
+  max_tokens: 768
+  temperature: 0.0
+  seed: 42
+
+review:
+  max_issues: 5
+  severity_threshold: high    # Only report critical issues
+  context_lines: 5            # Less context = fewer prompt tokens
+```
+
+#### Local Development (Free, No API Key)
+
+For offline development or when you don't want to use API credits:
+
+```yaml
+provider:
+  name: ollama
+  model: llama3.1             # or codellama, deepseek-coder
+  max_tokens: 1024
+  temperature: 0.0
+  seed: 42
+
+review:
+  max_issues: 10
+  severity_threshold: low     # Show everything since it's free
+  context_lines: 10
+```
+
+> **Note:** Run `ollama pull llama3.1` first to download the model.
+
+#### Security-Focused Audit
+
+For pre-release security audits or compliance checks:
+
+```yaml
+provider:
+  name: openai
+  api_key: ${AI_API_KEY}
+  model: gpt-4.1
+  max_tokens: 1500
+  temperature: 0.0
+  seed: 42
+
+review:
+  max_issues: 20
+  severity_threshold: low
+  custom_prompt: "Focus exclusively on security vulnerabilities: SQL injection, XSS, CSRF, mass assignment, hardcoded secrets, missing authentication, and insecure file uploads. Ignore performance and convention issues."
+  context_lines: 15
+
+filters:
+  include:
+    - "app/**"
+    - "routes/**"
+    - "resources/views/**"
+    - "config/**"
+  exclude:
+    - "tests/**"
+```
+
+#### Configuration Parameters Reference
+
+| Parameter | Default | Recommended | Description |
+|-----------|---------|-------------|-------------|
+| `temperature` | `0.0` | `0.0` | Set to `0.0` for consistent results. Values above `0.3` introduce noticeable randomness in issue detection and severity. |
+| `seed` | `42` | `42` | Any fixed integer ensures reproducibility. Set to `0` for random behavior. Not all providers support this. |
+| `max_tokens` | `1024` | `768-1500` | Controls maximum AI response length. Too low may truncate results; too high wastes tokens on verbose output. Auto-scales down for large prompts. |
+| `context_lines` | `10` | `5-15` | Lines of surrounding code sent with each diff. More context = better analysis but higher token cost. Use `5` for budget, `15` for thorough reviews. |
+| `max_issues` | `5` | `5-10` | Limits output count. Set higher for full audits, lower for CI gates. |
+| `severity_threshold` | `medium` | `medium` | Use `high` in CI to only fail on critical issues. Use `low` for thorough local reviews. |
+
 ### Custom Prompt
 
 You can add custom instructions that get appended to the built-in AI review prompt:
