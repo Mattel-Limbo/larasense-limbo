@@ -11,6 +11,7 @@ review:
   max_issues: 5
   severity_threshold: medium
   context_lines: 10     # Surrounding context lines per file (0 = disabled)
+  # custom_prompt: "Focus only on security issues and SQL injection risks"
 
 filters:
   include:
