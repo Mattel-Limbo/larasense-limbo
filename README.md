@@ -393,9 +393,9 @@ Use this when you need **identical results across runs** — critical for CI gat
 
 ```yaml
 provider:
-  name: openai
+  base_url: http://localhost:1430
   api_key: ${AI_API_KEY}
-  model: gpt-4.1
+  model: claude-sonnet-4.5
   max_tokens: 1024        # Cap output to prevent verbose responses
   temperature: 0.0         # Fully deterministic — zero randomness
   seed: 42                 # Fixed seed for reproducible results
