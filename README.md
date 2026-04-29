@@ -36,7 +36,12 @@ AI-powered code review CLI for Laravel projects. Analyzes git diffs and detects 
 ```bash
 git clone https://github.com/Mattel-Limbo/larasense-limbo.git
 cd larasense-limbo
+
+# Linux/macOS
 go build -o larasense-limbo .
+
+# Windows (the .exe extension is required)
+go build -o larasense-limbo.exe .
 ```
 
 The binary will be created in the current directory. Move it to a directory in your `PATH` for global access:
@@ -48,6 +53,8 @@ sudo mv larasense-limbo /usr/local/bin/
 # Windows — move to a directory in your PATH
 move larasense-limbo.exe C:\your\bin\path\
 ```
+
+> **Windows users:** Always build with `-o larasense-limbo.exe`. Without the `.exe` extension, Windows will not recognize the binary as an executable and may try to "open" it instead of running it.
 
 ### Verify Installation
 
@@ -212,11 +219,15 @@ larasense-limbo 1.0.0
 Version info is injected at build time via `-ldflags`:
 
 ```bash
+# Linux/macOS
 go build -ldflags "\
   -X github.com/Mattel-Limbo/larasense-limbo/cmd.Version=1.0.0 \
   -X github.com/Mattel-Limbo/larasense-limbo/cmd.Commit=$(git rev-parse --short HEAD) \
   -X github.com/Mattel-Limbo/larasense-limbo/cmd.BuildDate=$(date -u +%Y-%m-%d)" \
   -o larasense-limbo .
+
+# Windows (PowerShell)
+go build -ldflags "-X github.com/Mattel-Limbo/larasense-limbo/cmd.Version=1.0.0 -X github.com/Mattel-Limbo/larasense-limbo/cmd.Commit=$(git rev-parse --short HEAD) -X github.com/Mattel-Limbo/larasense-limbo/cmd.BuildDate=$(Get-Date -Format 'yyyy-MM-dd')" -o larasense-limbo.exe .
 ```
 
 ## Configuration
@@ -511,7 +522,13 @@ make help       # Show all targets
 Or use Go directly:
 
 ```bash
+# Linux/macOS
 go build -o larasense-limbo .
+
+# Windows
+go build -o larasense-limbo.exe .
+
+# Tests (all platforms)
 go test ./... -v
 go vet ./...
 ```

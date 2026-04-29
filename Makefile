@@ -4,6 +4,14 @@ VERSION     ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo 
 COMMIT      := $(shell git rev-parse --short HEAD 2>/dev/null || echo "none")
 BUILD_DATE  := $(shell date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo "unknown")
 
+# Detect Windows and append .exe suffix
+ifeq ($(OS),Windows_NT)
+  BIN_EXT := .exe
+else
+  BIN_EXT :=
+endif
+BINARY := $(APP_NAME)$(BIN_EXT)
+
 LDFLAGS := -ldflags "\
 	-X $(MODULE)/cmd.Version=$(VERSION) \
 	-X $(MODULE)/cmd.Commit=$(COMMIT) \
@@ -13,7 +21,7 @@ LDFLAGS := -ldflags "\
 
 ## build: Build the binary
 build:
-	go build $(LDFLAGS) -o $(APP_NAME) .
+	go build $(LDFLAGS) -o $(BINARY) .
 
 ## test: Run all tests
 test:
@@ -36,11 +44,11 @@ install:
 
 ## run: Build and run analyze (usage: make run ARGS="--base main")
 run: build
-	./$(APP_NAME) analyze $(ARGS)
+	./$(BINARY) analyze $(ARGS)
 
 ## version: Build and show version
 version: build
-	./$(APP_NAME) version
+	./$(BINARY) version
 
 ## help: Show this help
 help:
