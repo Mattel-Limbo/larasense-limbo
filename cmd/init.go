@@ -8,14 +8,18 @@ import (
 )
 
 const configTemplate = `provider:
-  base_url: https://api.openai.com
+  base_url: http://localhost:1430
   api_key: ${AI_API_KEY}
-  model: gpt-4.1
-  endpoint: chat  # "chat" for /v1/chat/completions, "responses" for /v1/responses
+  model: claude-sonnet-4.5
+  endpoint: chat        # "chat" for /v1/chat/completions, "responses" for /v1/responses
+  max_tokens: 1024      # Max completion tokens (0 = no limit, auto-scales with prompt size)
+  temperature: 0.1      # Lower = more consistent results (0.0-2.0, recommended: 0.0-0.2)
+  seed: 42              # Fixed seed for reproducible results (0 = random)
 
 review:
   max_issues: 5
   severity_threshold: medium
+  context_lines: 10     # Surrounding context lines per file (0 = disabled)
   # custom_prompt: "Focus only on security issues and SQL injection risks"
 
 filters:
