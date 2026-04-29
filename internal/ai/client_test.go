@@ -143,8 +143,8 @@ func TestBuildPrompt(t *testing.T) {
 	if prompt == "" {
 		t.Error("expected non-empty prompt")
 	}
-	// Should contain key review focus areas
-	keywords := []string{"N+1", "mass assignment", "Fat controllers", "severity", "JSON"}
+	// Should contain key review focus areas (compressed prompt uses these terms)
+	keywords := []string{"N+1", "mass assignment", "fat controllers", "severity", "JSON"}
 	for _, kw := range keywords {
 		if !containsStr(prompt, kw) {
 			t.Errorf("prompt should contain %q", kw)

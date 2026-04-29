@@ -2,11 +2,14 @@ provider:
   base_url: http://localhost:1430
   api_key: ${AI_API_KEY}
   model: claude-sonnet-4.5
-  endpoint: chat  # "chat" for /v1/chat/completions, "responses" for /v1/responses
+  endpoint: chat        # "chat" for /v1/chat/completions, "responses" for /v1/responses
+  max_tokens: 1024      # Max completion tokens (0 = no limit)
+  temperature: 0.3      # Lower = more focused/concise output (0.0-2.0)
 
 review:
   max_issues: 5
   severity_threshold: medium
+  context_lines: 10     # Surrounding context lines per file (0 = disabled)
 
 filters:
   include:

@@ -81,14 +81,27 @@ func (r *Reviewer) Run(base, head string) (*Result, error) {
 
 	log.Printf("Analyzing %d Laravel files", len(reviewCtx.Files))
 
-	// Step 4: Filter cached files (skip unchanged)
+	// Step 4: Filter cached files — return cached issues for unchanged files
 	var filesToReview []context.FileContext
+	var cachedIssues []Issue
 	var reviewCache *cache.Cache
 
 	if !r.noCache {
 		reviewCache = cache.Load()
 		for _, f := range reviewCtx.Files {
-			if reviewCache.HasChanged(f.Path, f.DiffText) {
+			if issues, hit := reviewCache.GetCachedIssues(f.Path, f.DiffText); hit {
+				log.Printf("Using cached results for %s (%d issue(s))", f.Path, len(issues))
+				for _, ci := range issues {
+					cachedIssues = append(cachedIssues, Issue{
+						Title:       ci.Title,
+						Description: ci.Description,
+						File:        ci.File,
+						Line:        ci.Line,
+						Severity:    ci.Severity,
+						Suggestion:  ci.Suggestion,
+					})
+				}
+			} else if reviewCache.HasChanged(f.Path, f.DiffText) {
 				filesToReview = append(filesToReview, f)
 			} else {
 				log.Printf("Skipping %s (unchanged since last review)", f.Path)
@@ -98,46 +111,72 @@ func (r *Reviewer) Run(base, head string) (*Result, error) {
 		filesToReview = reviewCtx.Files
 	}
 
-	if len(filesToReview) == 0 {
+	if len(filesToReview) == 0 && len(cachedIssues) == 0 {
 		return &Result{
 			FilesCount: len(reviewCtx.Files),
 			Summary:    fmt.Sprintf("All %d file(s) unchanged since last review. Nothing to analyze.", len(reviewCtx.Files)),
 		}, nil
 	}
 
-	if len(filesToReview) < len(reviewCtx.Files) {
-		log.Printf("Reviewing %d of %d files (%d cached)", len(filesToReview), len(reviewCtx.Files), len(reviewCtx.Files)-len(filesToReview))
-	}
+	// Collect all issues (cached + new from AI)
+	var allIssues []Issue
+	allIssues = append(allIssues, cachedIssues...)
 
-	// Step 5: Build diff text for AI
-	var diffText strings.Builder
-	for _, f := range filesToReview {
-		fmt.Fprintf(&diffText, "--- %s ---\n%s\n", f.Path, f.DiffText)
-	}
-
-	filteredCtx := &context.ReviewContext{Files: filesToReview}
-	contextText := filteredCtx.FormatForAI()
-
-	// Step 6: Send to AI
-	log.Println("Sending to AI provider for analysis...")
-	client := ai.NewClient(&r.cfg.Provider, r.verbose)
-	aiResp, err := client.Analyze(diffText.String(), contextText, r.cfg.Review.CustomPrompt)
-	if err != nil {
-		return nil, fmt.Errorf("AI analysis: %w", err)
-	}
-
-	// Step 7: Apply filters
-	issues := filterIssues(aiResp.Issues, r.cfg)
-
-	// Step 8: Update cache
-	if reviewCache != nil {
-		for _, f := range filesToReview {
-			reviewCache.Update(f.Path, f.DiffText)
+	if len(filesToReview) > 0 {
+		if len(filesToReview) < len(reviewCtx.Files) {
+			log.Printf("Reviewing %d of %d files (%d cached)", len(filesToReview), len(reviewCtx.Files), len(reviewCtx.Files)-len(filesToReview))
 		}
+
+		// Step 5: Build diff text for AI
+		var diffText strings.Builder
+		for _, f := range filesToReview {
+			fmt.Fprintf(&diffText, "--- %s ---\n%s\n", f.Path, f.DiffText)
+		}
+
+		filteredCtx := &context.ReviewContext{Files: filesToReview}
+		contextText := filteredCtx.FormatForAI()
+
+		// Step 6: Send to AI
+		log.Println("Sending to AI provider for analysis...")
+		client := ai.NewClient(&r.cfg.Provider, r.verbose)
+		aiResp, err := client.Analyze(diffText.String(), contextText, r.cfg.Review.CustomPrompt)
+		if err != nil {
+			return nil, fmt.Errorf("AI analysis: %w", err)
+		}
+
+		allIssues = append(allIssues, aiResp.Issues...)
+
+		// Step 7: Update cache with new AI results per file
+		if reviewCache != nil {
+			for _, f := range filesToReview {
+				// Collect issues belonging to this file
+				var fileIssues []cache.CachedIssue
+				for _, issue := range aiResp.Issues {
+					if issue.File == f.Path {
+						fileIssues = append(fileIssues, cache.CachedIssue{
+							Title:       issue.Title,
+							Description: issue.Description,
+							File:        issue.File,
+							Line:        issue.Line,
+							Severity:    issue.Severity,
+							Suggestion:  issue.Suggestion,
+						})
+					}
+				}
+				reviewCache.UpdateWithIssues(f.Path, f.DiffText, fileIssues)
+			}
+		}
+	}
+
+	// Save cache
+	if reviewCache != nil {
 		if err := reviewCache.Save(); err != nil {
 			log.Printf("Warning: failed to save cache: %v", err)
 		}
 	}
+
+	// Step 8: Apply filters
+	issues := filterIssues(allIssues, r.cfg)
 
 	// Step 9: Build result
 	result := &Result{

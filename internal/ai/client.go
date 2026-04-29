@@ -39,8 +39,10 @@ func NewClient(cfg *config.ProviderConfig, verbose bool) *Client {
 
 // chatRequest is the payload for /v1/chat/completions endpoint.
 type chatRequest struct {
-	Model    string        `json:"model"`
-	Messages []chatMessage `json:"messages"`
+	Model       string        `json:"model"`
+	Messages    []chatMessage `json:"messages"`
+	MaxTokens   int           `json:"max_tokens,omitempty"`
+	Temperature *float64      `json:"temperature,omitempty"`
 }
 
 // chatMessage represents a single message in the chat format.
@@ -51,9 +53,11 @@ type chatMessage struct {
 
 // responsesRequest is the payload for /v1/responses endpoint.
 type responsesRequest struct {
-	Model        string `json:"model"`
-	Instructions string `json:"instructions"`
-	Input        string `json:"input"`
+	Model        string   `json:"model"`
+	Instructions string   `json:"instructions"`
+	Input        string   `json:"input"`
+	MaxTokens    int      `json:"max_output_tokens,omitempty"`
+	Temperature  *float64 `json:"temperature,omitempty"`
 }
 
 // Response is the parsed response from the AI provider.
@@ -83,12 +87,21 @@ func (c *Client) Analyze(diffText, contextText, customPrompt string) (*Response,
 	var jsonBody []byte
 	var err error
 
+	// Prepare optional parameters
+	var tempPtr *float64
+	if c.cfg.Temperature > 0 {
+		temp := c.cfg.Temperature
+		tempPtr = &temp
+	}
+
 	endpoint := strings.ToLower(c.cfg.Endpoint)
 	if endpoint == "responses" {
 		reqBody := responsesRequest{
 			Model:        c.cfg.Model,
 			Instructions: systemPrompt,
 			Input:        userContent,
+			MaxTokens:    c.cfg.MaxTokens,
+			Temperature:  tempPtr,
 		}
 		jsonBody, err = json.Marshal(reqBody)
 	} else {
@@ -99,6 +112,8 @@ func (c *Client) Analyze(diffText, contextText, customPrompt string) (*Response,
 				{Role: "system", Content: systemPrompt},
 				{Role: "user", Content: userContent},
 			},
+			MaxTokens:   c.cfg.MaxTokens,
+			Temperature: tempPtr,
 		}
 		jsonBody, err = json.Marshal(reqBody)
 	}
@@ -283,40 +298,18 @@ func parseIssuesFromText(text string) (*Response, error) {
 }
 
 // buildPrompt returns the system prompt for the AI code reviewer.
+// Optimized for minimal token usage while preserving review quality.
 func buildPrompt() string {
-	return `You are a Senior Laravel Developer performing a strict code review.
+	return `Senior Laravel code reviewer. Analyze git diff, report issues as JSON only.
 
-Analyze the provided git diff and file context. Focus ONLY on:
+Focus: Performance (N+1, missing eager loading, inefficient queries), Security (mass assignment, SQL injection, XSS, CSRF, missing validation), Bad practices (fat controllers, logic in views, missing form requests, hardcoded values), Laravel conventions (Eloquent misuse, missing route model binding, naming).
 
-1. **Performance Issues**: N+1 queries, unnecessary database queries, missing eager loading, inefficient loops
-2. **Security Issues**: Missing validation, mass assignment vulnerabilities, SQL injection risks, XSS in Blade templates, CSRF issues
-3. **Bad Practices**: Fat controllers, business logic in Blade views, missing form requests, improper error handling, hardcoded values
-4. **Laravel Conventions**: Improper use of Eloquent, missing route model binding, incorrect naming conventions, missing middleware
+Rules: Only CHANGED lines. Specify file+line. Severity: low/medium/high. Skip style-only and test files. Keep description and suggestion each to 1 sentence max.
 
-Rules:
-- Only report issues found in the CHANGED lines (the diff), not in surrounding context
-- Be specific about the file and line number
-- Provide actionable suggestions
-- Rate severity as: low, medium, or high
-- Do NOT report style-only issues (formatting, spacing)
-- Do NOT report issues in test files
+Respond ONLY with valid JSON:
+{"issues":[{"title":"...","description":"...","file":"...","line":0,"severity":"low|medium|high","suggestion":"..."}]}
 
-You MUST respond with ONLY valid JSON in this exact format (no markdown, no explanation, just JSON):
-
-{
-  "issues": [
-    {
-      "title": "Brief issue title",
-      "description": "Detailed explanation of the problem",
-      "file": "path/to/file.php",
-      "line": 42,
-      "severity": "low|medium|high",
-      "suggestion": "How to fix this issue"
-    }
-  ]
-}
-
-If there are no issues, respond with: {"issues": []}`
+No issues: {"issues":[]}`
 }
 
 // truncate shortens a string to maxLen characters.
