@@ -21,9 +21,10 @@ const (
 
 // Client handles communication with the AI provider API.
 type Client struct {
-	cfg        *config.ProviderConfig
-	httpClient *http.Client
-	verbose    bool
+	cfg            *config.ProviderConfig
+	httpClient     *http.Client
+	verbose        bool
+	lastUserContent string // stored for markdown fallback file inference
 }
 
 // NewClient creates a new AI provider client.
@@ -107,6 +108,7 @@ func (c *Client) AnalyzeWithPrompt(systemPrompt, userContent string) (*Response,
 }
 
 func (c *Client) send(systemPrompt, userContent string) (*Response, error) {
+	c.lastUserContent = userContent
 
 	var jsonBody []byte
 	var err error
@@ -121,31 +123,9 @@ func (c *Client) send(systemPrompt, userContent string) (*Response, error) {
 		seedPtr = &seed
 	}
 
-	// Calculate effective max_tokens: use configured value, but cap based on
-	// estimated prompt size to avoid wasting budget on overly verbose responses.
+	// Use configured max_tokens directly — no scaling.
+	// The user controls this via config. Default: 4096.
 	effectiveMaxTokens := c.cfg.MaxTokens
-	if effectiveMaxTokens > 0 {
-		// Estimate prompt tokens (~4 chars per token)
-		promptChars := len(systemPrompt) + len(userContent)
-		estimatedPromptTokens := promptChars / 4
-
-		// If prompt is large, reduce completion budget proportionally
-		// to encourage concise output within the user's max_tokens limit
-		if estimatedPromptTokens > 2000 && effectiveMaxTokens > 512 {
-			// Scale down: large prompts need less verbose responses
-			scaledMax := effectiveMaxTokens * 2000 / estimatedPromptTokens
-			if scaledMax < 512 {
-				scaledMax = 512 // minimum floor
-			}
-			if scaledMax < effectiveMaxTokens {
-				effectiveMaxTokens = scaledMax
-				if c.verbose {
-					log.Printf("[VERBOSE] Scaled max_tokens from %d to %d (prompt ~%d tokens)",
-						c.cfg.MaxTokens, effectiveMaxTokens, estimatedPromptTokens)
-				}
-			}
-		}
-	}
 
 	endpoint := strings.ToLower(c.cfg.Endpoint)
 	if endpoint == "responses" {
@@ -249,7 +229,7 @@ func (c *Client) doRequest(body []byte) (*Response, error) {
 	// Parse the AI provider response.
 	// The response structure varies by provider. We attempt to extract the
 	// text content and then parse the JSON issues from it.
-	aiResp, err := extractContent(respBody)
+	aiResp, err := extractContent(respBody, c.lastUserContent)
 	if err != nil {
 		return nil, fmt.Errorf("parsing AI response: %w", err)
 	}
@@ -263,7 +243,7 @@ func (c *Client) doRequest(body []byte) (*Response, error) {
 
 // extractContent parses the AI provider's response and extracts the review issues.
 // It handles the common OpenAI-compatible response format.
-func extractContent(body []byte) (*Response, error) {
+func extractContent(body []byte, userContent ...string) (*Response, error) {
 	// Try OpenAI Responses API format first
 	var responsesAPI struct {
 		Output []struct {
@@ -272,28 +252,56 @@ func extractContent(body []byte) (*Response, error) {
 			} `json:"content"`
 		} `json:"output"`
 	}
+	// Extract raw text content from response envelope
+	var rawText string
+
 	if err := json.Unmarshal(body, &responsesAPI); err == nil && len(responsesAPI.Output) > 0 {
 		for _, out := range responsesAPI.Output {
 			for _, c := range out.Content {
 				if c.Text != "" {
-					return parseIssuesFromText(c.Text)
+					rawText = c.Text
+					break
 				}
+			}
+			if rawText != "" {
+				break
 			}
 		}
 	}
 
-	// Try OpenAI Chat Completions format
-	var chatResp struct {
-		Choices []struct {
-			Message struct {
-				Content string `json:"content"`
-			} `json:"message"`
-		} `json:"choices"`
+	var truncated bool
+
+	if rawText == "" {
+		var chatResp struct {
+			Choices []struct {
+				Message struct {
+					Content string `json:"content"`
+				} `json:"message"`
+				FinishReason string `json:"finish_reason"`
+			} `json:"choices"`
+		}
+		if err := json.Unmarshal(body, &chatResp); err == nil && len(chatResp.Choices) > 0 {
+			rawText = chatResp.Choices[0].Message.Content
+			truncated = chatResp.Choices[0].FinishReason == "length"
+		}
 	}
-	if err := json.Unmarshal(body, &chatResp); err == nil && len(chatResp.Choices) > 0 {
-		content := chatResp.Choices[0].Message.Content
-		if content != "" {
-			return parseIssuesFromText(content)
+
+	// Try parsing as JSON first
+	if rawText != "" {
+		resp, err := parseIssuesFromText(rawText)
+		if err == nil {
+			return resp, nil
+		}
+
+		// If response was truncated (finish_reason: "length"), try to repair JSON
+		if truncated {
+			if repaired := repairTruncatedJSON(rawText); repaired != "" {
+				resp, err = parseIssuesFromText(repaired)
+				if err == nil {
+					log.Printf("[warning] AI response was truncated — parsed %d issue(s) from partial response. Consider increasing max_tokens in config.", len(resp.Issues))
+					return resp, nil
+				}
+			}
 		}
 	}
 
@@ -301,6 +309,17 @@ func extractContent(body []byte) (*Response, error) {
 	var directResp Response
 	if err := json.Unmarshal(body, &directResp); err == nil && len(directResp.Issues) > 0 {
 		return &directResp, nil
+	}
+
+	// Last resort: parse as Markdown with file hints from user content
+	if rawText != "" {
+		var hints map[string]string
+		if len(userContent) > 0 && userContent[0] != "" {
+			hints = extractFileHints(userContent[0])
+		}
+		if issues := parseMarkdownFallback(rawText, hints); len(issues) > 0 {
+			return &Response{Issues: issues}, nil
+		}
 	}
 
 	return nil, fmt.Errorf("could not extract content from AI response: %s", truncate(string(body), 300))
@@ -347,7 +366,7 @@ func parseIssuesFromText(text string) (*Response, error) {
 	}
 
 	// Try 5: Parse Markdown response as fallback (some models ignore JSON-only instruction)
-	if issues := parseMarkdownFallback(cleaned); len(issues) > 0 {
+	if issues := parseMarkdownFallback(cleaned, nil); len(issues) > 0 {
 		return &Response{Issues: issues}, nil
 	}
 
@@ -416,85 +435,305 @@ func findMatchingBrace(s string) int {
 
 // parseMarkdownFallback extracts issues from a Markdown-formatted AI response.
 // This handles models that ignore JSON-only instructions and return Markdown instead.
-func parseMarkdownFallback(text string) []Issue {
+// fileHints maps section names to file paths (e.g., "Auditable" → "app/Traits/Auditable.php").
+func parseMarkdownFallback(text string, fileHints map[string]string) []Issue {
 	var issues []Issue
 	lines := strings.Split(text, "\n")
 
 	var currentFile string
 	var currentTitle string
 	var currentDesc strings.Builder
+	var currentSuggestion strings.Builder
 	var currentSeverity string
 	var currentLine int
+	var currentBeforeLines []string
+	var currentAfterLines []string
 	inIssue := false
+	inCodeBlock := false
+	codeBlockType := "" // "before" or "after"
+	inProblem := false
+	inFix := false
 
 	flushIssue := func() {
 		if currentTitle != "" {
 			desc := strings.TrimSpace(currentDesc.String())
+			suggestion := strings.TrimSpace(currentSuggestion.String())
 			if desc == "" {
 				desc = currentTitle
 			}
-			issues = append(issues, Issue{
+
+			issue := Issue{
 				Title:       currentTitle,
 				Description: desc,
 				File:        currentFile,
 				Line:        currentLine,
 				Severity:    currentSeverity,
-				Suggestion:  "",
-			})
+				Suggestion:  suggestion,
+			}
+
+			// Attach fix if we have before/after code
+			if len(currentBeforeLines) > 0 && len(currentAfterLines) > 0 && currentLine > 0 {
+				before := strings.Join(currentBeforeLines, "\n")
+				after := strings.Join(currentAfterLines, "\n")
+				beforeCount := len(currentBeforeLines)
+				issue.Fix = &Fix{
+					StartLine: currentLine,
+					EndLine:   currentLine + beforeCount - 1,
+					Before:    before,
+					After:     after,
+				}
+			}
+
+			issues = append(issues, issue)
 		}
 		currentTitle = ""
 		currentDesc.Reset()
+		currentSuggestion.Reset()
 		currentSeverity = "medium"
 		currentLine = 0
+		currentBeforeLines = nil
+		currentAfterLines = nil
 		inIssue = false
+		inProblem = false
+		inFix = false
+		codeBlockType = ""
 	}
 
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
 
-		// Detect file headers: "## File: `path/to/file.php`"
-		if strings.HasPrefix(trimmed, "## File:") || strings.HasPrefix(trimmed, "## File ") {
-			flushIssue()
-			currentFile = extractBacktickContent(trimmed)
+		// Handle code blocks (``` ... ```)
+		if strings.HasPrefix(trimmed, "```") {
+			if inCodeBlock {
+				inCodeBlock = false
+				continue
+			}
+			inCodeBlock = true
+			// First code block after problem = before, after fix marker = after
+			if inFix && len(currentBeforeLines) > 0 {
+				codeBlockType = "after"
+			} else if inIssue {
+				codeBlockType = "before"
+			}
 			continue
 		}
 
-		// Detect issue headers: "### Title" or "### Bug: Title"
-		if strings.HasPrefix(trimmed, "### ") {
+		if inCodeBlock {
+			switch codeBlockType {
+			case "before":
+				currentBeforeLines = append(currentBeforeLines, line)
+			case "after":
+				currentAfterLines = append(currentAfterLines, line)
+			}
+			continue
+		}
+
+		// Detect file headers: "## File: `path`" or "## `path`" or "## Auditable Trait"
+		if strings.HasPrefix(trimmed, "## ") && !strings.HasPrefix(trimmed, "### ") {
 			flushIssue()
-			currentTitle = strings.TrimPrefix(trimmed, "### ")
-			currentSeverity = detectSeverityFromText(currentTitle)
+			if extracted := extractBacktickContent(trimmed); extracted != "" {
+				currentFile = extracted
+			} else {
+				sectionName := strings.TrimPrefix(trimmed, "## ")
+				sectionName = strings.TrimSpace(sectionName)
+				// Try fileHints first, then infer from text
+				if fileHints != nil {
+					for key, path := range fileHints {
+						if strings.Contains(sectionName, key) {
+							currentFile = path
+							break
+						}
+					}
+				}
+				if currentFile == "" {
+					if inferred := inferFileFromSection(sectionName, text); inferred != "" {
+						currentFile = inferred
+					}
+				}
+			}
+			continue
+		}
+
+		// Detect issue headers: "### Title" or "#### 1. Title" or "#### Title"
+		if strings.HasPrefix(trimmed, "#### ") || (strings.HasPrefix(trimmed, "### ") && !strings.Contains(strings.ToLower(trimmed), "issues found")) {
+			flushIssue()
+			header := trimmed
+			if strings.HasPrefix(header, "#### ") {
+				header = strings.TrimPrefix(header, "#### ")
+			} else {
+				header = strings.TrimPrefix(header, "### ")
+			}
+			// Remove leading number: "1. **Critical: Title**" → "Critical: Title"
+			if idx := strings.Index(header, ". "); idx >= 0 && idx <= 3 {
+				header = header[idx+2:]
+			}
+			// Remove bold markers
+			header = strings.ReplaceAll(header, "**", "")
+			// Remove trailing line reference: "(Line ~108-110)"
+			if parenIdx := strings.LastIndex(header, "(Line"); parenIdx > 0 {
+				lineRef := header[parenIdx:]
+				header = strings.TrimSpace(header[:parenIdx])
+				if n := extractFirstNumber(lineRef); n > 0 {
+					currentLine = n
+				}
+			}
+			currentTitle = strings.TrimSpace(header)
+			currentSeverity = detectSeverityFromText(currentTitle + " " + trimmed)
 			inIssue = true
+			inProblem = false
+			inFix = false
+			currentBeforeLines = nil
+			currentAfterLines = nil
 			continue
 		}
 
-		// Detect severity markers in body
+		// Skip "### Issues Found" group headers
+		if strings.HasPrefix(trimmed, "### ") && strings.Contains(strings.ToLower(trimmed), "issues found") {
+			continue
+		}
+
 		if inIssue {
 			lower := strings.ToLower(trimmed)
-			if strings.Contains(lower, "critical") || strings.Contains(lower, "\xf0\x9f\x94\xb4") {
-				currentSeverity = "high"
-			} else if strings.Contains(lower, "\xf0\x9f\x9f\xa1") && currentSeverity != "high" {
-				currentSeverity = "medium"
-			} else if strings.Contains(lower, "\xf0\x9f\x9f\xa2") && currentSeverity == "medium" {
-				currentSeverity = "low"
+
+			// Detect **Problem:** / **Fix:** markers
+			if strings.Contains(trimmed, "**Problem:**") || strings.Contains(trimmed, "**Problem**") {
+				inProblem = true
+				inFix = false
+				// Extract inline problem text after marker
+				if idx := strings.Index(trimmed, ":**"); idx > 0 {
+					rest := strings.TrimSpace(trimmed[idx+3:])
+					if rest != "" {
+						currentDesc.WriteString(rest)
+						currentDesc.WriteString(" ")
+					}
+				}
+				continue
+			}
+			if strings.Contains(trimmed, "**Fix:**") || strings.Contains(trimmed, "**Fix**") || strings.HasPrefix(trimmed, "**Fix") {
+				inProblem = false
+				inFix = true
+				// Extract inline fix text after marker
+				if idx := strings.Index(trimmed, ":**"); idx > 0 {
+					rest := strings.TrimSpace(trimmed[idx+3:])
+					if rest != "" {
+						currentSuggestion.WriteString(rest)
+						currentSuggestion.WriteString(" ")
+					}
+				}
+				continue
+			}
+			if strings.HasPrefix(trimmed, "**Severity:") {
+				if strings.Contains(lower, "high") || strings.Contains(lower, "critical") {
+					currentSeverity = "high"
+				} else if strings.Contains(lower, "medium") {
+					currentSeverity = "medium"
+				} else if strings.Contains(lower, "low") {
+					currentSeverity = "low"
+				}
+				continue
 			}
 
-			// Detect line references: "**Lines affected:** 60, 65" or "**Line 42**"
+			// Detect severity from text
+			if strings.Contains(lower, "critical") {
+				currentSeverity = "high"
+			}
+
+			// Detect line references
 			if currentLine == 0 && (strings.Contains(lower, "line") || strings.Contains(lower, "lines")) {
 				if n := extractFirstNumber(trimmed); n > 0 {
 					currentLine = n
 				}
 			}
 
-			if trimmed != "" && !strings.HasPrefix(trimmed, "---") && !strings.HasPrefix(trimmed, "```") && !strings.HasPrefix(trimmed, "|") {
-				currentDesc.WriteString(trimmed)
-				currentDesc.WriteString(" ")
+			// Accumulate description/suggestion text
+			if trimmed != "" && !strings.HasPrefix(trimmed, "---") && !strings.HasPrefix(trimmed, "|") {
+				if inFix && !inProblem {
+					currentSuggestion.WriteString(trimmed)
+					currentSuggestion.WriteString(" ")
+				} else {
+					currentDesc.WriteString(trimmed)
+					currentDesc.WriteString(" ")
+				}
 			}
 		}
 	}
 	flushIssue()
 
 	return issues
+}
+
+// repairTruncatedJSON attempts to fix a JSON response that was cut off mid-stream.
+// It finds the last complete issue object and closes the JSON structure.
+func repairTruncatedJSON(text string) string {
+	text = strings.TrimSpace(text)
+
+	// Must start with {"issues":[ to be repairable
+	if !strings.HasPrefix(text, `{"issues":[`) {
+		return ""
+	}
+
+	// Strategy: find the last complete issue object by looking for the last "},"
+	// or the last "}" that closes an issue object
+	lastCompleteComma := strings.LastIndex(text, "},")
+	lastCompleteBrace := strings.LastIndex(text, `}]`)
+
+	cutPoint := -1
+	if lastCompleteBrace > lastCompleteComma && lastCompleteBrace > 0 {
+		// Already has a complete array — just needs closing
+		cutPoint = lastCompleteBrace + 2
+	} else if lastCompleteComma > 0 {
+		// Has at least one complete issue followed by comma — cut after it and close
+		cutPoint = lastCompleteComma + 1
+	}
+
+	if cutPoint <= 0 {
+		return ""
+	}
+
+	repaired := text[:cutPoint] + "]}"
+
+	// Verify it's valid JSON
+	var resp Response
+	if err := json.Unmarshal([]byte(repaired), &resp); err != nil {
+		return ""
+	}
+
+	return repaired
+}
+
+// extractFileHints parses user content to build a map of class/trait names to file paths.
+// Input format: "File: app/Traits/Auditable.php [php]\n..."
+// Output: {"Auditable": "app/Traits/Auditable.php", "HandleUploadedFile": "app/Traits/HandleUploadedFile.php"}
+func extractFileHints(userContent string) map[string]string {
+	hints := make(map[string]string)
+	for _, line := range strings.Split(userContent, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if !strings.HasPrefix(trimmed, "File:") {
+			continue
+		}
+		// "File: app/Traits/Auditable.php [php]" → "app/Traits/Auditable.php"
+		rest := strings.TrimPrefix(trimmed, "File:")
+		rest = strings.TrimSpace(rest)
+		parts := strings.Fields(rest)
+		if len(parts) == 0 {
+			continue
+		}
+		filePath := parts[0]
+		if !strings.HasSuffix(filePath, ".php") {
+			continue
+		}
+
+		// Extract class name from path: "app/Traits/Auditable.php" → "Auditable"
+		base := filePath
+		if lastSlash := strings.LastIndex(base, "/"); lastSlash >= 0 {
+			base = base[lastSlash+1:]
+		}
+		className := strings.TrimSuffix(base, ".php")
+		if className != "" {
+			hints[className] = filePath
+		}
+	}
+	return hints
 }
 
 func extractBacktickContent(s string) string {
@@ -507,6 +746,59 @@ func extractBacktickContent(s string) string {
 		return ""
 	}
 	return s[start+1 : start+1+end]
+}
+
+// inferFileFromSection tries to match a section name like "Auditable Trait" or
+// "HandleUploadedFile" to a file path. Uses multiple strategies:
+// 1. Search for "File: path" pattern in the full text
+// 2. Search for "ClassName::method" patterns that reference the section name
+// 3. Map common Laravel names to paths
+func inferFileFromSection(sectionName, fullText string) string {
+	// Clean section name: "Auditable Trait" → "Auditable"
+	name := sectionName
+	// Remove markdown formatting
+	name = strings.ReplaceAll(name, "`", "")
+	name = strings.ReplaceAll(name, "**", "")
+	// Remove type suffixes
+	for _, suffix := range []string{" Trait", " Traits", " Controller", " Model", " Service", " Class", " Helper"} {
+		name = strings.TrimSuffix(name, suffix)
+	}
+	// Remove "Code Review:" prefix
+	if idx := strings.Index(name, ":"); idx >= 0 {
+		candidate := strings.TrimSpace(name[idx+1:])
+		if candidate != "" {
+			name = candidate
+		}
+	}
+	// Remove "and" joined names — take first: "Auditable and HandleUploadedFile" → "Auditable"
+	if idx := strings.Index(name, " and "); idx > 0 {
+		name = name[:idx]
+	}
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return ""
+	}
+
+	// Strategy 1: Search for "File: .../<name>.php" in the full text
+	for _, line := range strings.Split(fullText, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "File:") && strings.Contains(trimmed, name) {
+			parts := strings.Fields(trimmed)
+			if len(parts) >= 2 {
+				filePath := parts[1]
+				// Remove trailing brackets like "[php]"
+				if bracketIdx := strings.Index(filePath, "["); bracketIdx > 0 {
+					filePath = filePath[:bracketIdx]
+				}
+				filePath = strings.TrimSpace(filePath)
+				if strings.HasSuffix(filePath, ".php") {
+					return filePath
+				}
+			}
+		}
+	}
+
+	return ""
 }
 
 func detectSeverityFromText(title string) string {
@@ -618,12 +910,17 @@ const fixPromptSuffix = `
 
 ADDITIONAL: For each HIGH and MEDIUM severity issue, include a "fix" object with the exact code replacement.
 - "start_line" and "end_line": the line range to replace (1-indexed, inclusive)
-- "before": the EXACT original code from those lines (copy verbatim)
+- "before": the EXACT original code from those lines (copy verbatim, preserve indentation)
 - "after": the corrected replacement code (drop-in replacement)
 - Do NOT include "fix" for LOW severity or issues requiring structural refactoring
 - If you cannot provide an exact fix, omit the "fix" field for that issue
+- Each issue MUST be a SEPARATE object in the array — do NOT combine multiple issues into one
 
-{"issues":[{"title":"string","description":"string","file":"string","line":0,"severity":"high|medium|low","suggestion":"string","fix":{"start_line":0,"end_line":0,"before":"original code","after":"fixed code"}}]}
+CRITICAL: You MUST output ONLY a single raw JSON object. No markdown. No explanation. No code fences. Just the JSON.
+
+Example of CORRECT output with 2 issues and fixes:
+{"issues":[{"title":"Null reference on route()","description":"request()->route() can return null","file":"app/Traits/Auditable.php","line":108,"severity":"high","suggestion":"Add null check","fix":{"start_line":108,"end_line":110,"before":"            'url' => method_exists($this, 'replaceAuditRouteUrl')\n                ? $this->replaceAuditRouteUrl()\n                : route($this->replaceLastRouteSegment(request()->route()->getName(), 'edit'), $this->getKey()),","after":"            'url' => $this->resolveAuditUrl(),"}},{"title":"Double write","description":"create() followed by save()","file":"app/Traits/Auditable.php","line":112,"severity":"medium","suggestion":"Compute message before create","fix":{"start_line":106,"end_line":115,"before":"        $log = AuditLog::create([...]);\n        $log->message = ...;\n        $log->save();","after":"        $log = new AuditLog([...]);\n        $log->message = ...;\n        $log->save();"}}]}
+
 Empty: {"issues":[]}`
 
 func BuildDiffFixPrompt() string {

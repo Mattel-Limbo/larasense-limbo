@@ -96,7 +96,7 @@ Status tracking untuk fitur-fitur larasense-limbo.
 
 | # | Fitur | Status | Catatan |
 |---|-------|--------|---------|
-| 57 | Interactive fix mode | 💡 Future | `--fix --interactive`: prompt y/n per fix sebelum apply, preview diff per issue |
+| 57 | Interactive fix mode | ✅ Done | `--fix --apply`: interactive y/n/q per fix with colored diff preview. `--fix --apply --yes`: apply all without prompting. Fuzzy before-matching (4 strategies + nearby search ±3 lines). Skipped fixes now logged with reason. |
 | 58 | Multi-language support | 💡 Future | Vue/JS files di Laravel project |
 | 59 | Rule customization | 💡 Future | Enable/disable specific rule categories |
 | 60 | Baseline support | 💡 Future | Ignore existing issues, hanya report baru |
@@ -119,5 +119,5 @@ Status tracking untuk fitur-fitur larasense-limbo.
 | CI/CD | 4 | 0 | 0 |
 | Planned Features | 8 | 0 | 0 |
 | New Features | 16 | 0 | 0 |
-| Future Ideas | 0 | 0 | 10 |
-| **Total** | **56** | **0** | **10** |
+| Future Ideas | 1 | 0 | 9 |
+| **Total** | **57** | **0** | **9** |

@@ -21,6 +21,7 @@ var (
 	flagScanNoCache bool
 	flagScanFix     bool
 	flagScanApply   bool
+	flagScanYes     bool
 	flagScanPatch   string
 )
 
@@ -42,7 +43,8 @@ func init() {
 	scanCmd.Flags().BoolVar(&flagScanVerbose, "verbose", false, "Show detailed request/response logs for debugging")
 	scanCmd.Flags().BoolVar(&flagScanNoCache, "no-cache", false, "Skip cache and re-scan all files")
 	scanCmd.Flags().BoolVar(&flagScanFix, "fix", false, "Generate code fix suggestions for issues")
-	scanCmd.Flags().BoolVar(&flagScanApply, "apply", false, "Apply fixes directly to files (requires --fix)")
+	scanCmd.Flags().BoolVar(&flagScanApply, "apply", false, "Apply fixes interactively — prompts y/n per fix (requires --fix)")
+	scanCmd.Flags().BoolVar(&flagScanYes, "yes", false, "Apply all fixes without prompting (requires --fix --apply)")
 	scanCmd.Flags().StringVar(&flagScanPatch, "patch", "", "Write fixes as unified diff to file (requires --fix)")
 
 	rootCmd.AddCommand(scanCmd)
@@ -51,6 +53,9 @@ func init() {
 func runScan(cmd *cobra.Command, args []string) error {
 	if flagScanApply && !flagScanFix {
 		return fmt.Errorf("--apply requires --fix")
+	}
+	if flagScanYes && !flagScanApply {
+		return fmt.Errorf("--yes requires --apply")
 	}
 	if flagScanPatch != "" && !flagScanFix {
 		return fmt.Errorf("--patch requires --fix")
@@ -101,7 +106,7 @@ func runScan(cmd *cobra.Command, args []string) error {
 		fmt.Fprint(os.Stdout, output.FormatHuman(result))
 	}
 
-	if err := handleFixOutput(result, flagScanFix, flagScanApply, flagScanPatch); err != nil {
+	if err := handleFixOutput(result, flagScanFix, flagScanApply, flagScanYes, flagScanPatch); err != nil {
 		return err
 	}
 

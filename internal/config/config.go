@@ -83,7 +83,7 @@ func DefaultConfig() *Config {
 		Provider: ProviderConfig{
 			Model:       "gpt-4.1",
 			Endpoint:    "chat",
-			MaxTokens:   1024,
+			MaxTokens:   16384,
 			Temperature: 0.0,
 			Seed:        42,
 		},

@@ -147,7 +147,8 @@ larasense-limbo analyze --base main --head HEAD --json
 | `--github-pr` | string | | Post results as PR comment (format: `owner/repo#number`) |
 | `--fix` | bool | `false` | Generate code fix suggestions for issues |
 | `--patch` | string | | Write fixes as unified diff to file (requires `--fix`) |
-| `--apply` | bool | `false` | Apply fixes directly to files (requires `--fix`) |
+| `--apply` | bool | `false` | Apply fixes interactively with y/n prompt per fix (requires `--fix`) |
+| `--yes` | bool | `false` | Apply all fixes without prompting (requires `--fix --apply`) |
 
 ### Scan (Full Codebase Audit)
 
@@ -184,7 +185,8 @@ larasense-limbo scan --no-cache
 | `--no-cache` | bool | `false` | Skip cache and re-scan all files |
 | `--fix` | bool | `false` | Generate code fix suggestions for issues |
 | `--patch` | string | | Write fixes as unified diff to file (requires `--fix`) |
-| `--apply` | bool | `false` | Apply fixes directly to files (requires `--fix`) |
+| `--apply` | bool | `false` | Apply fixes interactively with y/n prompt per fix (requires `--fix`) |
+| `--yes` | bool | `false` | Apply all fixes without prompting (requires `--fix --apply`) |
 
 The scan command automatically skips `vendor/`, `node_modules/`, `.git/`, and `storage/` directories. Files are filtered using the same `include`/`exclude` glob patterns from your config.
 
@@ -204,9 +206,13 @@ larasense-limbo scan --path app/Http/Controllers --fix
 larasense-limbo scan --fix --patch fixes.patch
 git apply fixes.patch
 
-# Apply fixes directly to files (use with caution)
+# Apply fixes interactively (y/n per fix with colored diff preview)
 larasense-limbo scan --fix --apply
 larasense-limbo analyze --base main --fix --apply
+
+# Apply ALL fixes without prompting (CI-friendly)
+larasense-limbo scan --fix --apply --yes
+larasense-limbo analyze --base main --fix --apply --yes
 ```
 
 #### Fix Flags (available on both `analyze` and `scan`)
@@ -215,13 +221,18 @@ larasense-limbo analyze --base main --fix --apply
 |------|------|---------|-------------|
 | `--fix` | bool | `false` | Generate code fix suggestions for high and medium severity issues |
 | `--patch` | string | | Write fixes as unified diff to file (requires `--fix`) |
-| `--apply` | bool | `false` | Apply fixes directly to source files (requires `--fix`) |
+| `--apply` | bool | `false` | Apply fixes interactively — prompts y/n per fix with colored diff preview (requires `--fix`) |
+| `--yes` | bool | `false` | Apply all fixes without prompting (requires `--fix --apply`) |
 
 #### How It Works
 
 1. When `--fix` is used, the AI prompt is enhanced to request before/after code blocks
 2. Fixes are only generated for **high** and **medium** severity issues (saves tokens)
 3. Without `--fix`, the pipeline is unchanged — zero extra token consumption
+4. `--apply` shows each fix with colored before/after diff and prompts `y/n/q` (quit)
+5. `--apply --yes` skips prompts and applies all fixes (for CI or batch operations)
+6. Before-matching uses 4 strategies (exact → trimmed → normalized → contains) + nearby search ±3 lines
+7. Skipped fixes are logged with reason (mismatch, user rejected, invalid range)
 
 #### Output with `--fix`
 

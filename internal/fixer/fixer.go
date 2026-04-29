@@ -1,7 +1,10 @@
 package fixer
 
 import (
+	"bufio"
 	"fmt"
+	"io"
+	"log"
 	"os"
 	"sort"
 	"strings"
@@ -9,12 +12,40 @@ import (
 	"github.com/Mattel-Limbo/larasense-limbo/internal/ai"
 )
 
+// ApplyMode controls how fixes are applied.
+type ApplyMode int
+
+const (
+	// ApplyNone only shows fix suggestions, does not apply.
+	ApplyNone ApplyMode = iota
+	// ApplyInteractive prompts the user for each fix (y/n).
+	ApplyInteractive
+	// ApplyAll applies all fixes without prompting.
+	ApplyAll
+)
+
+// AppliedFix records a successfully applied fix.
 type AppliedFix struct {
 	File  string
 	Line  int
 	Title string
 }
 
+// SkippedFix records a fix that was skipped and why.
+type SkippedFix struct {
+	File   string
+	Line   int
+	Title  string
+	Reason string
+}
+
+// ApplyResult holds the outcome of an apply operation.
+type ApplyResult struct {
+	Applied []AppliedFix
+	Skipped []SkippedFix
+}
+
+// GeneratePatch creates a unified diff string from fixable issues.
 func GeneratePatch(issues []ai.Issue) string {
 	byFile := groupFixesByFile(issues)
 	var sb strings.Builder
@@ -46,6 +77,7 @@ func GeneratePatch(issues []ai.Issue) string {
 	return sb.String()
 }
 
+// WritePatch writes a unified diff patch file.
 func WritePatch(issues []ai.Issue, outputPath string) error {
 	patch := GeneratePatch(issues)
 	if patch == "" {
@@ -54,54 +86,343 @@ func WritePatch(issues []ai.Issue, outputPath string) error {
 	return os.WriteFile(outputPath, []byte(patch), 0644)
 }
 
-func ApplyFixes(issues []ai.Issue) ([]AppliedFix, error) {
+// ApplyFixes applies fixes to source files.
+// mode controls whether to prompt interactively or apply all.
+// reader is used for interactive input (pass os.Stdin for real usage, or a buffer for tests).
+func ApplyFixes(issues []ai.Issue, mode ApplyMode, reader io.Reader) (*ApplyResult, error) {
 	byFile := groupFixesByFile(issues)
-	var applied []AppliedFix
+	result := &ApplyResult{}
+	scanner := bufio.NewScanner(reader)
 
 	for file, fixes := range byFile {
-		content, err := os.ReadFile(file)
-		if err != nil {
-			return applied, fmt.Errorf("reading %s: %w", file, err)
-		}
-
-		lines := strings.Split(string(content), "\n")
-
-		// Apply bottom-up to preserve line numbers
-		sortFixesDesc(fixes)
+		// Track which line ranges have been modified by previous fixes in this file.
+		// Used to detect overlapping fixes and provide clear skip messages.
+		var appliedRanges [][2]int // [startLine, endLine] of applied fixes (original coordinates)
 
 		for _, issue := range fixes {
 			f := issue.Fix
-			if f.StartLine < 1 || f.EndLine > len(lines) || f.StartLine > f.EndLine {
+			severity := strings.ToUpper(issue.Severity)
+
+			// Check if this fix overlaps with a previously applied fix.
+			// If so, skip it — the code has already been changed in that region.
+			if overlapsApplied(f.StartLine, f.EndLine, appliedRanges) {
+				result.Skipped = append(result.Skipped, SkippedFix{
+					File: file, Line: f.StartLine, Title: issue.Title,
+					Reason: "overlaps with a previously applied fix in the same region",
+				})
 				continue
 			}
 
-			actualBefore := strings.Join(lines[f.StartLine-1:f.EndLine], "\n")
-			if strings.TrimSpace(actualBefore) != strings.TrimSpace(f.Before) {
+			// Re-read file for each fix (file may have changed from previous fix)
+			content, err := os.ReadFile(file)
+			if err != nil {
+				result.Skipped = append(result.Skipped, SkippedFix{
+					File: file, Line: f.StartLine, Title: issue.Title,
+					Reason: fmt.Sprintf("cannot read file: %v", err),
+				})
+				continue
+			}
+			lines := strings.Split(string(content), "\n")
+
+			// Validate line range
+			if f.StartLine < 1 || f.StartLine > f.EndLine {
+				result.Skipped = append(result.Skipped, SkippedFix{
+					File: file, Line: f.StartLine, Title: issue.Title,
+					Reason: fmt.Sprintf("invalid line range %d-%d", f.StartLine, f.EndLine),
+				})
 				continue
 			}
 
+			// Clamp EndLine to file length
+			endLine := f.EndLine
+			if endLine > len(lines) {
+				endLine = len(lines)
+			}
+
+			// Match: try multiple strategies to find the "before" code
+			actualBefore := strings.Join(lines[f.StartLine-1:endLine], "\n")
+			matched := matchBefore(actualBefore, f.Before)
+
+			if !matched {
+				found, newStart, newEnd := searchNearby(lines, f.Before, f.StartLine, 15)
+				if found {
+					matched = true
+					log.Printf("[fix] %s:%d — matched at nearby lines %d-%d", file, f.StartLine, newStart, newEnd)
+					f.StartLine = newStart
+					endLine = newEnd
+				}
+			}
+
+			if !matched {
+				found, newStart, newEnd := searchByContent(lines, f.Before)
+				if found {
+					matched = true
+					log.Printf("[fix] %s:%d — found by content search at lines %d-%d", file, f.StartLine, newStart, newEnd)
+					f.StartLine = newStart
+					endLine = newEnd
+				}
+			}
+
+			if !matched {
+				result.Skipped = append(result.Skipped, SkippedFix{
+					File: file, Line: f.StartLine, Title: issue.Title,
+					Reason: "code at target lines doesn't match AI's 'before' — file may have changed",
+				})
+				continue
+			}
+
+			// Interactive mode: prompt user
+			if mode == ApplyInteractive {
+				accepted := promptFix(scanner, file, f.StartLine, severity, issue.Title, f.Before, f.After)
+				if !accepted {
+					result.Skipped = append(result.Skipped, SkippedFix{
+						File: file, Line: f.StartLine, Title: issue.Title,
+						Reason: "skipped by user",
+					})
+					continue
+				}
+			}
+
+			// Record the original range before applying
+			appliedRanges = append(appliedRanges, [2]int{f.StartLine, endLine})
+
+			// Apply the fix and write immediately
 			afterLines := strings.Split(f.After, "\n")
-			newLines := make([]string, 0, len(lines)-(f.EndLine-f.StartLine+1)+len(afterLines))
+			newLines := make([]string, 0, len(lines)-(endLine-f.StartLine+1)+len(afterLines))
 			newLines = append(newLines, lines[:f.StartLine-1]...)
 			newLines = append(newLines, afterLines...)
-			newLines = append(newLines, lines[f.EndLine:]...)
-			lines = newLines
+			newLines = append(newLines, lines[endLine:]...)
 
-			applied = append(applied, AppliedFix{
+			if err := os.WriteFile(file, []byte(strings.Join(newLines, "\n")), 0644); err != nil {
+				return result, fmt.Errorf("writing %s: %w", file, err)
+			}
+
+			result.Applied = append(result.Applied, AppliedFix{
 				File:  file,
 				Line:  f.StartLine,
 				Title: issue.Title,
 			})
 		}
+	}
 
-		if err := os.WriteFile(file, []byte(strings.Join(lines, "\n")), 0644); err != nil {
-			return applied, fmt.Errorf("writing %s: %w", file, err)
+	return result, nil
+}
+
+// promptFix displays a fix and asks the user to accept or skip.
+func promptFix(scanner *bufio.Scanner, file string, line int, severity, title, before, after string) bool {
+	icon := severityIcon(severity)
+
+	fmt.Println()
+	fmt.Printf("  ╔══════════════════════════════════════════════════════════════╗\n")
+	fmt.Printf("  ║  %s [%s] %s\n", icon, severity, title)
+	fmt.Printf("  ║  📄 %s (line %d)\n", file, line)
+	fmt.Printf("  ╠══════════════════════════════════════════════════════════════╣\n")
+
+	// Before (red)
+	fmt.Printf("  ║  \033[31m┌─ Before:\033[0m\n")
+	for _, l := range strings.Split(before, "\n") {
+		fmt.Printf("  ║  \033[31m│ - %s\033[0m\n", l)
+	}
+
+	// After (green)
+	fmt.Printf("  ║  \033[32m├─ After:\033[0m\n")
+	for _, l := range strings.Split(after, "\n") {
+		fmt.Printf("  ║  \033[32m│ + %s\033[0m\n", l)
+	}
+	fmt.Printf("  ║  └─\n")
+
+	fmt.Printf("  ╚══════════════════════════════════════════════════════════════╝\n")
+	fmt.Printf("  Apply this fix? [\033[32my\033[0m/\033[31mn\033[0m/\033[33mq\033[0m(uit)] > ")
+
+	if !scanner.Scan() {
+		return false
+	}
+
+	answer := strings.TrimSpace(strings.ToLower(scanner.Text()))
+	switch answer {
+	case "y", "yes":
+		return true
+	case "q", "quit":
+		fmt.Println("  Aborting remaining fixes.")
+		os.Exit(0)
+		return false
+	default:
+		return false
+	}
+}
+
+// matchBefore checks if the actual file content matches the AI's "before" string.
+// Uses progressively looser matching strategies.
+func matchBefore(actual, expected string) bool {
+	// Strategy 1: exact match
+	if actual == expected {
+		return true
+	}
+
+	// Strategy 2: trimmed match (leading/trailing whitespace)
+	if strings.TrimSpace(actual) == strings.TrimSpace(expected) {
+		return true
+	}
+
+	// Strategy 3: normalized whitespace per line (trim trailing spaces)
+	actualNorm := normalizeLines(actual)
+	expectedNorm := normalizeLines(expected)
+	if actualNorm == expectedNorm {
+		return true
+	}
+
+	// Strategy 4: stripped comparison — ignore ALL leading whitespace per line
+	// This handles tabs vs spaces, different indentation levels
+	if stripIndentation(actual) == stripIndentation(expected) {
+		return true
+	}
+
+	// Strategy 5: actual contains expected (AI sometimes gives partial before)
+	if len(expected) > 10 && strings.Contains(stripIndentation(actual), stripIndentation(expected)) {
+		return true
+	}
+
+	return false
+}
+
+// stripIndentation removes all leading whitespace from each line and joins.
+func stripIndentation(s string) string {
+	lines := strings.Split(s, "\n")
+	var stripped []string
+	for _, l := range lines {
+		trimmed := strings.TrimSpace(l)
+		if trimmed != "" {
+			stripped = append(stripped, trimmed)
+		}
+	}
+	return strings.Join(stripped, "\n")
+}
+
+// searchNearby looks for the "before" content within ±radius lines of the target.
+func searchNearby(lines []string, before string, targetLine, radius int) (bool, int, int) {
+	beforeLines := strings.Split(before, "\n")
+	// Remove empty trailing lines from before (AI often adds trailing newline)
+	for len(beforeLines) > 0 && strings.TrimSpace(beforeLines[len(beforeLines)-1]) == "" {
+		beforeLines = beforeLines[:len(beforeLines)-1]
+	}
+	span := len(beforeLines)
+	if span == 0 {
+		return false, 0, 0
+	}
+
+	start := targetLine - radius
+	if start < 1 {
+		start = 1
+	}
+	end := targetLine + radius
+	if end > len(lines) {
+		end = len(lines)
+	}
+
+	for i := start; i <= end-span+1; i++ {
+		if i-1+span > len(lines) {
+			break
+		}
+		candidate := strings.Join(lines[i-1:i-1+span], "\n")
+		if matchBefore(candidate, before) {
+			return true, i, i + span - 1
 		}
 	}
 
-	return applied, nil
+	return false, 0, 0
 }
 
+// searchByContent searches the entire file for the "before" block by matching
+// the stripped content of each line. Handles cases where AI line number is completely wrong.
+func searchByContent(lines []string, before string) (bool, int, int) {
+	beforeLines := strings.Split(before, "\n")
+	// Remove empty trailing lines
+	for len(beforeLines) > 0 && strings.TrimSpace(beforeLines[len(beforeLines)-1]) == "" {
+		beforeLines = beforeLines[:len(beforeLines)-1]
+	}
+	span := len(beforeLines)
+	if span == 0 {
+		return false, 0, 0
+	}
+
+	// Strip the first non-empty before line for anchor search
+	var anchorContent string
+	for _, bl := range beforeLines {
+		stripped := strings.TrimSpace(bl)
+		if stripped != "" && stripped != "{" && stripped != "}" {
+			anchorContent = stripped
+			break
+		}
+	}
+	if anchorContent == "" {
+		return false, 0, 0
+	}
+
+	// Scan file for anchor line, then verify full block
+	for i := 0; i <= len(lines)-span; i++ {
+		if strings.TrimSpace(lines[i]) == anchorContent || strings.Contains(strings.TrimSpace(lines[i]), anchorContent) {
+			// Found anchor — check if full block matches from here
+			candidate := strings.Join(lines[i:i+span], "\n")
+			if matchBefore(candidate, before) {
+				return true, i + 1, i + span // 1-indexed
+			}
+
+			// Try starting a few lines before the anchor (AI's before may start before the anchor)
+			for offset := 1; offset <= 3; offset++ {
+				startIdx := i - offset
+				if startIdx < 0 {
+					continue
+				}
+				endIdx := startIdx + span
+				if endIdx > len(lines) {
+					continue
+				}
+				candidate = strings.Join(lines[startIdx:endIdx], "\n")
+				if matchBefore(candidate, before) {
+					return true, startIdx + 1, endIdx
+				}
+			}
+		}
+	}
+
+	return false, 0, 0
+}
+
+// normalizeLines trims each line and joins with single newline.
+func normalizeLines(s string) string {
+	lines := strings.Split(s, "\n")
+	for i, l := range lines {
+		lines[i] = strings.TrimRight(l, " \t\r")
+	}
+	return strings.Join(lines, "\n")
+}
+
+func severityIcon(severity string) string {
+	switch strings.ToUpper(severity) {
+	case "HIGH":
+		return "🔴"
+	case "MEDIUM":
+		return "🟡"
+	case "LOW":
+		return "🔵"
+	default:
+		return "⚪"
+	}
+}
+
+// overlapsApplied checks if a fix range overlaps with any previously applied fix range.
+func overlapsApplied(start, end int, applied [][2]int) bool {
+	for _, r := range applied {
+		aStart, aEnd := r[0], r[1]
+		// Two ranges overlap if one starts before the other ends
+		if start <= aEnd && end >= aStart {
+			return true
+		}
+	}
+	return false
+}
+
+// CountFixable returns the number of issues that have fix data.
 func CountFixable(issues []ai.Issue) int {
 	count := 0
 	for _, issue := range issues {

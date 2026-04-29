@@ -188,7 +188,7 @@ The variable $businessAccount is used but was never defined.
 
 This fetches every business account with no filter.`
 
-	issues := parseMarkdownFallback(markdown)
+	issues := parseMarkdownFallback(markdown, nil)
 
 	if len(issues) != 2 {
 		t.Fatalf("expected 2 issues from markdown, got %d", len(issues))

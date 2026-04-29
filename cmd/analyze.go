@@ -25,6 +25,7 @@ var (
 	flagGitHubPR string
 	flagFix      bool
 	flagApply    bool
+	flagYes      bool
 	flagPatch    string
 )
 
@@ -48,7 +49,8 @@ func init() {
 	analyzeCmd.Flags().BoolVar(&flagNoCache, "no-cache", false, "Skip cache and re-review all files")
 	analyzeCmd.Flags().StringVar(&flagGitHubPR, "github-pr", "", "Post results as PR comment (format: owner/repo#number)")
 	analyzeCmd.Flags().BoolVar(&flagFix, "fix", false, "Generate code fix suggestions for issues")
-	analyzeCmd.Flags().BoolVar(&flagApply, "apply", false, "Apply fixes directly to files (requires --fix)")
+	analyzeCmd.Flags().BoolVar(&flagApply, "apply", false, "Apply fixes interactively — prompts y/n per fix (requires --fix)")
+	analyzeCmd.Flags().BoolVar(&flagYes, "yes", false, "Apply all fixes without prompting (requires --fix --apply)")
 	analyzeCmd.Flags().StringVar(&flagPatch, "patch", "", "Write fixes as unified diff to file (requires --fix)")
 
 	rootCmd.AddCommand(analyzeCmd)
@@ -57,6 +59,9 @@ func init() {
 func runAnalyze(cmd *cobra.Command, args []string) error {
 	if flagApply && !flagFix {
 		return fmt.Errorf("--apply requires --fix")
+	}
+	if flagYes && !flagApply {
+		return fmt.Errorf("--yes requires --apply")
 	}
 	if flagPatch != "" && !flagFix {
 		return fmt.Errorf("--patch requires --fix")
@@ -94,7 +99,7 @@ func runAnalyze(cmd *cobra.Command, args []string) error {
 		fmt.Fprint(os.Stdout, output.FormatHuman(result))
 	}
 
-	if err := handleFixOutput(result, flagFix, flagApply, flagPatch); err != nil {
+	if err := handleFixOutput(result, flagFix, flagApply, flagYes, flagPatch); err != nil {
 		return err
 	}
 
