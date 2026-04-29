@@ -17,11 +17,13 @@ type Config struct {
 
 // ProviderConfig holds AI provider settings.
 type ProviderConfig struct {
-	Name     string `mapstructure:"name"`     // Provider preset: "openai", "anthropic", "gemini", "ollama", or empty for custom
-	BaseURL  string `mapstructure:"base_url"`
-	APIKey   string `mapstructure:"api_key"`
-	Model    string `mapstructure:"model"`
-	Endpoint string `mapstructure:"endpoint"` // "chat" or "responses" (default: "chat")
+	Name        string  `mapstructure:"name"`        // Provider preset: "openai", "anthropic", "gemini", "ollama", or empty for custom
+	BaseURL     string  `mapstructure:"base_url"`
+	APIKey      string  `mapstructure:"api_key"`
+	Model       string  `mapstructure:"model"`
+	Endpoint    string  `mapstructure:"endpoint"`    // "chat" or "responses" (default: "chat")
+	MaxTokens   int     `mapstructure:"max_tokens"`  // Max completion tokens (default: 1024, 0 = no limit)
+	Temperature float64 `mapstructure:"temperature"` // Sampling temperature (default: 0.3)
 }
 
 // providerPreset holds default settings for known AI providers.
@@ -65,6 +67,7 @@ type ReviewConfig struct {
 	MaxIssues         int    `mapstructure:"max_issues"`
 	SeverityThreshold string `mapstructure:"severity_threshold"`
 	CustomPrompt      string `mapstructure:"custom_prompt"`
+	ContextLines      int    `mapstructure:"context_lines"` // Surrounding context lines (default: 10, 0 = disabled)
 }
 
 // FilterConfig holds file inclusion/exclusion patterns.
@@ -77,12 +80,15 @@ type FilterConfig struct {
 func DefaultConfig() *Config {
 	return &Config{
 		Provider: ProviderConfig{
-			Model:    "gpt-4.1",
-			Endpoint: "chat",
+			Model:       "gpt-4.1",
+			Endpoint:    "chat",
+			MaxTokens:   1024,
+			Temperature: 0.3,
 		},
 		Review: ReviewConfig{
 			MaxIssues:         5,
 			SeverityThreshold: "medium",
+			ContextLines:      10,
 		},
 		Filters: FilterConfig{
 			Include: []string{
@@ -106,8 +112,11 @@ func Load() (*Config, error) {
 	defaults := DefaultConfig()
 	v.SetDefault("provider.model", defaults.Provider.Model)
 	v.SetDefault("provider.endpoint", defaults.Provider.Endpoint)
+	v.SetDefault("provider.max_tokens", defaults.Provider.MaxTokens)
+	v.SetDefault("provider.temperature", defaults.Provider.Temperature)
 	v.SetDefault("review.max_issues", defaults.Review.MaxIssues)
 	v.SetDefault("review.severity_threshold", defaults.Review.SeverityThreshold)
+	v.SetDefault("review.context_lines", defaults.Review.ContextLines)
 	v.SetDefault("filters.include", defaults.Filters.Include)
 	v.SetDefault("filters.exclude", defaults.Filters.Exclude)
 

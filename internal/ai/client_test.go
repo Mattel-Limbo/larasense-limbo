@@ -143,7 +143,8 @@ func TestBuildDiffPrompt(t *testing.T) {
 	if prompt == "" {
 		t.Error("expected non-empty prompt")
 	}
-	keywords := []string{"N+1", "mass assignment", "severity", "JSON"}
+	// Should contain key review focus areas
+	keywords := []string{"N+1", "mass assignment", "fat controllers", "severity", "JSON"}
 	for _, kw := range keywords {
 		if !containsStr(prompt, kw) {
 			t.Errorf("diff prompt should contain %q", kw)
@@ -171,7 +172,7 @@ func TestParseMarkdownFallback(t *testing.T) {
 
 ### Bug: Undefined Variable
 
-**Severity: 🔴 Critical**
+**Severity: Critical**
 
 **Lines affected:** 60, 65, 70
 
@@ -183,7 +184,7 @@ The variable $businessAccount is used but was never defined.
 
 ### Unbounded Query
 
-**Severity: 🟡 Medium**
+**Severity: Medium**
 
 This fetches every business account with no filter.`
 

@@ -15,11 +15,20 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.Provider.Endpoint != "chat" {
 		t.Errorf("expected default endpoint 'chat', got '%s'", cfg.Provider.Endpoint)
 	}
+	if cfg.Provider.MaxTokens != 1024 {
+		t.Errorf("expected default max_tokens 1024, got %d", cfg.Provider.MaxTokens)
+	}
+	if cfg.Provider.Temperature != 0.3 {
+		t.Errorf("expected default temperature 0.3, got %f", cfg.Provider.Temperature)
+	}
 	if cfg.Review.MaxIssues != 5 {
 		t.Errorf("expected default max_issues 5, got %d", cfg.Review.MaxIssues)
 	}
 	if cfg.Review.SeverityThreshold != "medium" {
 		t.Errorf("expected default severity_threshold 'medium', got '%s'", cfg.Review.SeverityThreshold)
+	}
+	if cfg.Review.ContextLines != 10 {
+		t.Errorf("expected default context_lines 10, got %d", cfg.Review.ContextLines)
 	}
 	if len(cfg.Filters.Include) != 3 {
 		t.Errorf("expected 3 default include patterns, got %d", len(cfg.Filters.Include))

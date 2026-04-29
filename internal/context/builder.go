@@ -59,9 +59,18 @@ func (b *Builder) Build(files []diff.FileDiff) (*ReviewContext, error) {
 			ChangedLines: f.ChangedLines(),
 		}
 
-		// Get surrounding context (±20 lines around first changed line)
-		if len(fc.ChangedLines) > 0 && !f.IsDeleted {
-			surrounding, err := git.GetSurroundingLines(b.head, f.Path, fc.ChangedLines[0], 20)
+		// Get surrounding context with adaptive window size
+		contextLines := b.cfg.Review.ContextLines
+		if contextLines == 0 {
+			contextLines = 10 // default fallback
+		}
+		// Adaptive: use smaller window for small diffs
+		if len(fc.ChangedLines) > 0 && len(fc.ChangedLines) < 10 && contextLines > 5 {
+			contextLines = 5
+		}
+
+		if len(fc.ChangedLines) > 0 && !f.IsDeleted && contextLines > 0 {
+			surrounding, err := git.GetSurroundingLines(b.head, f.Path, fc.ChangedLines[0], contextLines)
 			if err == nil {
 				fc.Surrounding = surrounding
 			}
@@ -192,34 +201,36 @@ func GenerateHint(path string) string {
 	return generateHint(path)
 }
 
+// generateHint produces a concise keyword-based hint for the AI about what to check.
+// Optimized for minimal token usage — uses short tags instead of full sentences.
 func generateHint(path string) string {
 	fileType := classifyFile(path)
 
 	hints := map[string]string{
-		"controller":       "This is a Laravel Controller. Check for fat controller anti-pattern, proper validation, and resource usage.",
-		"model":            "This is an Eloquent Model. Check for mass assignment protection ($fillable/$guarded), proper relationships, and N+1 query risks.",
-		"middleware":       "This is HTTP Middleware. Check for proper request/response handling and security concerns.",
-		"form_request":     "This is a Form Request. Check validation rules completeness and authorization logic.",
-		"service":          "This is a Service class. Check for single responsibility and proper dependency injection.",
-		"repository":       "This is a Repository class. Check for proper query building and Eloquent usage.",
-		"event":            "This is an Event class. Check for proper event data structure.",
-		"listener":         "This is an Event Listener. Check for proper queue handling and error management.",
-		"job":              "This is a Queue Job. Check for proper retry logic, timeout settings, and idempotency.",
-		"mailable":         "This is a Mailable class. Check for proper view binding and queue usage.",
-		"notification":     "This is a Notification class. Check for proper channel configuration.",
-		"policy":           "This is an Authorization Policy. Check for proper gate/policy logic.",
-		"service_provider": "This is a Service Provider. Check for proper binding registration and boot logic.",
-		"blade_view":       "This is a Blade template. Check for XSS vulnerabilities (unescaped output), logic in views, and proper directive usage.",
-		"route":            "This is a route definition file. Check for proper middleware assignment, route naming, and RESTful conventions.",
-		"config":           "This is a configuration file. Check for hardcoded secrets and proper env() usage.",
-		"migration":        "This is a database migration. Check for proper column types, indexes, and rollback support.",
-		"factory":          "This is a Model Factory. Check for realistic fake data generation.",
+		"controller":       "Check: fat-controller, validation, resource-usage",
+		"model":            "Check: N+1, mass-assignment, $fillable/$guarded, relationships",
+		"middleware":       "Check: request/response-handling, security",
+		"form_request":     "Check: validation-rules, authorization",
+		"service":          "Check: SRP, dependency-injection",
+		"repository":       "Check: query-building, Eloquent-usage",
+		"event":            "Check: event-data-structure",
+		"listener":         "Check: queue-handling, error-management",
+		"job":              "Check: retry-logic, timeout, idempotency",
+		"mailable":         "Check: view-binding, queue-usage",
+		"notification":     "Check: channel-config",
+		"policy":           "Check: gate/policy-logic",
+		"service_provider": "Check: binding-registration, boot-logic",
+		"blade_view":       "Check: XSS, unescaped-output, logic-in-views",
+		"route":            "Check: middleware, route-naming, RESTful",
+		"config":           "Check: hardcoded-secrets, env()-usage",
+		"migration":        "Check: column-types, indexes, rollback",
+		"factory":          "Check: realistic-fake-data",
 	}
 
 	if hint, ok := hints[fileType]; ok {
 		return hint
 	}
-	return "This is a PHP file in the Laravel project."
+	return "Check: general-php"
 }
 
 // matchGlob performs simple glob matching supporting ** and * patterns.

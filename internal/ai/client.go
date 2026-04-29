@@ -39,8 +39,10 @@ func NewClient(cfg *config.ProviderConfig, verbose bool) *Client {
 
 // chatRequest is the payload for /v1/chat/completions endpoint.
 type chatRequest struct {
-	Model    string        `json:"model"`
-	Messages []chatMessage `json:"messages"`
+	Model       string        `json:"model"`
+	Messages    []chatMessage `json:"messages"`
+	MaxTokens   int           `json:"max_tokens,omitempty"`
+	Temperature *float64      `json:"temperature,omitempty"`
 }
 
 // chatMessage represents a single message in the chat format.
@@ -51,9 +53,11 @@ type chatMessage struct {
 
 // responsesRequest is the payload for /v1/responses endpoint.
 type responsesRequest struct {
-	Model        string `json:"model"`
-	Instructions string `json:"instructions"`
-	Input        string `json:"input"`
+	Model        string   `json:"model"`
+	Instructions string   `json:"instructions"`
+	Input        string   `json:"input"`
+	MaxTokens    int      `json:"max_output_tokens,omitempty"`
+	Temperature  *float64 `json:"temperature,omitempty"`
 }
 
 // Response is the parsed response from the AI provider.
@@ -91,12 +95,21 @@ func (c *Client) send(systemPrompt, userContent string) (*Response, error) {
 	var jsonBody []byte
 	var err error
 
+	// Prepare optional parameters
+	var tempPtr *float64
+	if c.cfg.Temperature > 0 {
+		temp := c.cfg.Temperature
+		tempPtr = &temp
+	}
+
 	endpoint := strings.ToLower(c.cfg.Endpoint)
 	if endpoint == "responses" {
 		reqBody := responsesRequest{
 			Model:        c.cfg.Model,
 			Instructions: systemPrompt,
 			Input:        userContent,
+			MaxTokens:    c.cfg.MaxTokens,
+			Temperature:  tempPtr,
 		}
 		jsonBody, err = json.Marshal(reqBody)
 	} else {
@@ -107,6 +120,8 @@ func (c *Client) send(systemPrompt, userContent string) (*Response, error) {
 				{Role: "system", Content: systemPrompt},
 				{Role: "user", Content: userContent},
 			},
+			MaxTokens:   c.cfg.MaxTokens,
+			Temperature: tempPtr,
 		}
 		jsonBody, err = json.Marshal(reqBody)
 	}
@@ -408,11 +423,11 @@ func parseMarkdownFallback(text string) []Issue {
 		// Detect severity markers in body
 		if inIssue {
 			lower := strings.ToLower(trimmed)
-			if strings.Contains(lower, "critical") || strings.Contains(lower, "🔴") {
+			if strings.Contains(lower, "critical") || strings.Contains(lower, "\xf0\x9f\x94\xb4") {
 				currentSeverity = "high"
-			} else if strings.Contains(lower, "🟡") && currentSeverity != "high" {
+			} else if strings.Contains(lower, "\xf0\x9f\x9f\xa1") && currentSeverity != "high" {
 				currentSeverity = "medium"
-			} else if strings.Contains(lower, "🟢") && currentSeverity == "medium" {
+			} else if strings.Contains(lower, "\xf0\x9f\x9f\xa2") && currentSeverity == "medium" {
 				currentSeverity = "low"
 			}
 
@@ -472,12 +487,13 @@ func extractFirstNumber(s string) int {
 }
 
 // BuildDiffPrompt returns the system prompt for diff-based code review.
+// Optimized for minimal token usage while preserving review quality.
 func BuildDiffPrompt() string {
 	return `You are a JSON API that reviews Laravel code. You receive git diffs and respond with structured JSON only.
 
 Analyze the provided git diff. Report issues in: performance (N+1, missing eager loading), security (mass assignment, SQL injection, XSS), bad practices (fat controllers, missing Form Requests), conventions (Eloquent misuse, missing middleware).
 
-Rules: only CHANGED lines, specific file+line, severity low/medium/high, no style issues, no test files.
+Rules: only CHANGED lines, specific file+line, severity low/medium/high, no style issues, no test files. Keep description and suggestion each to 1 sentence max.
 
 CRITICAL: Your entire response must be valid JSON. No markdown. No explanation. No text before or after the JSON.
 
@@ -487,12 +503,13 @@ Empty result: {"issues":[]}`
 }
 
 // BuildScanPrompt returns the system prompt for full codebase scan.
+// Optimized for minimal token usage while preserving review quality.
 func BuildScanPrompt() string {
 	return `You are a JSON API that audits Laravel code. You receive full source files and respond with structured JSON only.
 
 Analyze the provided Laravel files. Report high-impact issues in: security (mass assignment, SQL injection, XSS, hardcoded secrets), performance (N+1, missing eager loading), bad practices (fat controllers, missing Form Requests), conventions (Eloquent misuse, missing middleware).
 
-Rules: review entire file, specific file+line, severity low/medium/high, no style issues, no test files, prioritize impactful issues.
+Rules: review entire file, specific file+line, severity low/medium/high, no style issues, no test files, prioritize impactful issues. Keep description and suggestion each to 1 sentence max.
 
 CRITICAL: Your entire response must be valid JSON. No markdown. No explanation. No text before or after the JSON.
 
