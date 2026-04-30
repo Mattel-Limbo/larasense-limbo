@@ -92,20 +92,43 @@ Status tracking untuk fitur-fitur larasense-limbo.
 | 55 | Fix-aware AI prompts | ✅ Done | `BuildDiffFixPrompt()`, `BuildScanFixPrompt()` — only generate fixes for high+medium severity |
 | 56 | Fix cache integration | ✅ Done | CachedFix struct, cache invalidation when fixMode on but cached data lacks fixes |
 
+## AI Fixer Enhancements
+
+| # | Fitur | Status | Catatan |
+|---|-------|--------|---------|
+| 57 | Interactive fix mode | ✅ Done | `--apply` interactive y/n/q per fix, `--yes` apply all, colored diff preview |
+| 58 | 6-strategy fuzzy matching | ✅ Done | Exact → trimmed → normalized whitespace → stripped indentation → contains → full-file search |
+| 59 | Nearby search ±15 lines | ✅ Done | Handle AI line number offset, `searchNearby()` + `searchByContent()` |
+| 60 | Markdown fallback parser | ✅ Done | Parse `###`/`####` headers, severity markers, code blocks, file hints inference |
+| 61 | Truncated JSON repair | ✅ Done | `repairTruncatedJSON()` — find last complete issue, close brackets |
+| 62 | Auto-retry on truncation | ✅ Done | Detect `finish_reason: "length"`, retry with 2x `max_tokens` (cap 65536) |
+| 63 | Dry-run mode | ✅ Done | `--fix --dry-run` — show what would be applied without writing files |
+| 64 | Undo/rollback | ✅ Done | Auto-backup before apply, `larasense-limbo undo` command, cleanup after restore |
+| 65 | Git-aware apply | ✅ Done | `--git-branch name` or `auto`, creates branch before apply, shows revert instructions |
+| 66 | Batch fix summary | ✅ Done | Summary table: total fixable, applied, skipped + breakdown by skip reason |
+| 67 | Batch apply per file | ✅ Done | 3-phase: validate all fixes against original → overlap check → apply bottom-up in single pass |
+| 68 | Overlapping fix detection | ✅ Done | `overlapsApplied()` — detect & skip with clear message |
+| 69 | EndLine clamping | ✅ Done | AI sometimes overshoots file length, clamped to actual line count |
+| 70 | `max_tokens` default 16384 | ✅ Done | Prevents truncation for most responses, user-configurable |
+
 ## Future Ideas
 
 | # | Fitur | Status | Catatan |
 |---|-------|--------|---------|
-| 57 | Interactive fix mode | ✅ Done | `--fix --apply`: interactive y/n/q per fix with colored diff preview. `--fix --apply --yes`: apply all without prompting. Fuzzy before-matching (4 strategies + nearby search ±3 lines). Skipped fixes now logged with reason. |
-| 58 | Multi-language support | 💡 Future | Vue/JS files di Laravel project |
-| 59 | Rule customization | 💡 Future | Enable/disable specific rule categories |
-| 60 | Baseline support | 💡 Future | Ignore existing issues, hanya report baru |
-| 61 | SARIF output | 💡 Future | Standard format untuk security tools |
-| 62 | VS Code extension | 💡 Future | Real-time review di editor |
-| 63 | Pre-commit hook | 💡 Future | Review otomatis sebelum commit |
-| 64 | Team config sharing | 💡 Future | Shared config via package registry |
-| 65 | Review history/analytics | 💡 Future | Track issue trends over time |
-| 66 | Plugin system | 💡 Future | Custom analyzers via Go plugins |
+| 71 | Fix confidence score | 💡 Future | AI rate confidence per fix, skip low-confidence (low priority — existing safety layers sufficient) |
+| 72 | Multi-pass fix | 💡 Future | Re-run AI setelah fix applied untuk generate fix yang akurat terhadap state baru |
+| 73 | Fix dependency graph | 💡 Future | Detect fix A depends on fix B, apply in correct order |
+| 74 | Semantic diff display | 💡 Future | Syntax-highlighted diff di terminal |
+| 75 | Fix templates | 💡 Future | Pre-defined fix patterns tanpa AI (e.g., `Model::all()` → `Model::cursor()`) |
+| 76 | Multi-language support | 💡 Future | Vue/JS files di Laravel project |
+| 77 | Rule customization | 💡 Future | Enable/disable specific rule categories |
+| 78 | Baseline support | 💡 Future | Ignore existing issues, hanya report baru |
+| 79 | SARIF output | 💡 Future | Standard format untuk security tools |
+| 80 | VS Code extension | 💡 Future | Real-time review di editor |
+| 81 | Pre-commit hook | 💡 Future | Review otomatis sebelum commit |
+| 82 | Team config sharing | 💡 Future | Shared config via package registry |
+| 83 | Review history/analytics | 💡 Future | Track issue trends over time |
+| 84 | Plugin system | 💡 Future | Custom analyzers via Go plugins |
 
 ---
 
@@ -119,5 +142,6 @@ Status tracking untuk fitur-fitur larasense-limbo.
 | CI/CD | 4 | 0 | 0 |
 | Planned Features | 8 | 0 | 0 |
 | New Features | 16 | 0 | 0 |
-| Future Ideas | 1 | 0 | 9 |
-| **Total** | **57** | **0** | **9** |
+| AI Fixer Enhancements | 14 | 0 | 0 |
+| Future Ideas | 0 | 0 | 14 |
+| **Total** | **70** | **0** | **14** |

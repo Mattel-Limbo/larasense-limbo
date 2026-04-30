@@ -202,6 +202,9 @@ larasense-limbo analyze --fix
 larasense-limbo scan --fix
 larasense-limbo scan --path app/Http/Controllers --fix
 
+# Preview what would be applied (no file changes)
+larasense-limbo scan --fix --dry-run
+
 # Generate a patch file (review before applying)
 larasense-limbo scan --fix --patch fixes.patch
 git apply fixes.patch
@@ -212,7 +215,13 @@ larasense-limbo analyze --base main --fix --apply
 
 # Apply ALL fixes without prompting (CI-friendly)
 larasense-limbo scan --fix --apply --yes
-larasense-limbo analyze --base main --fix --apply --yes
+
+# Apply on a separate git branch (easy revert)
+larasense-limbo scan --fix --apply --yes --git-branch fix/ai-review
+larasense-limbo scan --fix --apply --yes --git-branch auto  # auto-generates branch name
+
+# Undo all applied fixes (restore from backup)
+larasense-limbo undo
 ```
 
 #### Fix Flags (available on both `analyze` and `scan`)
@@ -220,19 +229,24 @@ larasense-limbo analyze --base main --fix --apply --yes
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
 | `--fix` | bool | `false` | Generate code fix suggestions for high and medium severity issues |
+| `--dry-run` | bool | `false` | Show what fixes would be applied without writing to files (requires `--fix`) |
 | `--patch` | string | | Write fixes as unified diff to file (requires `--fix`) |
 | `--apply` | bool | `false` | Apply fixes interactively — prompts y/n per fix with colored diff preview (requires `--fix`) |
 | `--yes` | bool | `false` | Apply all fixes without prompting (requires `--fix --apply`) |
+| `--git-branch` | string | | Create a git branch before applying fixes for easy revert (requires `--fix --apply`) |
 
 #### How It Works
 
 1. When `--fix` is used, the AI prompt is enhanced to request before/after code blocks
 2. Fixes are only generated for **high** and **medium** severity issues (saves tokens)
 3. Without `--fix`, the pipeline is unchanged — zero extra token consumption
-4. `--apply` shows each fix with colored before/after diff and prompts `y/n/q` (quit)
-5. `--apply --yes` skips prompts and applies all fixes (for CI or batch operations)
-6. Before-matching uses 6 strategies (exact → trimmed → normalized whitespace → stripped indentation → contains → full-file search) + nearby search ±15 lines
-7. Skipped fixes are logged with reason (mismatch, user rejected, invalid range, overlapping)
+4. Multiple fixes in the same file are validated against the **original** file content, then applied **bottom-up** in a single pass — no line-shift conflicts
+5. `--apply` shows each fix with colored before/after diff and prompts `y/n/q` (quit)
+6. `--apply --yes` skips prompts and applies all fixes (for CI or batch operations)
+7. Before-matching uses 6 strategies (exact → trimmed → normalized whitespace → stripped indentation → contains → full-file search) + nearby search ±15 lines
+8. If AI response is truncated (`finish_reason: "length"`), auto-retries with 2x `max_tokens`
+9. Skipped fixes are logged with reason (mismatch, user rejected, invalid range, overlapping)
+10. A summary table is shown at the end with total fixable, applied, skipped + breakdown by skip reason
 
 #### Output with `--fix`
 
@@ -251,13 +265,25 @@ larasense-limbo analyze --base main --fix --apply --yes
 #### Safety
 
 - **Interactive by default**: `--apply` prompts y/n per fix with colored diff preview. Press `q` to abort remaining fixes.
+- **Dry-run preview**: `--dry-run` shows all fixes that would be applied without modifying any files.
 - **6-strategy fuzzy matching**: Handles AI line number offsets (±15 lines), whitespace differences, indentation mismatches, and full-file content search.
-- **Before-validation**: Before applying any fix, the tool compares the `before` code against the actual file content. If no match is found, the fix is skipped with a clear reason.
+- **Batch apply per file**: Multiple fixes in the same file are validated against the original content, then applied bottom-up in a single pass — eliminates line-shift conflicts between fixes.
 - **Overlapping detection**: If two fixes target the same lines, the second is skipped to prevent file corruption.
-- **Re-read per fix**: File is re-read after each applied fix to ensure subsequent fixes work on fresh content.
-- **Truncated response repair**: If AI response is cut off (`finish_reason: "length"`), the tool attempts to repair the JSON and extract complete issues.
+- **Auto-retry on truncation**: If AI response is cut off (`finish_reason: "length"`), automatically retries with 2x `max_tokens` (cap at 65536).
+- **Undo support**: `larasense-limbo undo` restores all files to their pre-fix state from automatic backups.
+- **Git-aware apply**: `--git-branch` creates a separate branch before applying, making revert as simple as `git checkout <original-branch>`.
 - **`--yes` requires `--apply`**: You can't skip prompting without explicitly opting in.
 - **Patch review**: Use `--patch` to generate a diff file you can review before applying with `git apply`.
+
+#### Undo Command
+
+If applied fixes cause issues, revert all changes:
+
+```bash
+larasense-limbo undo
+```
+
+This restores files from the backup created during `--apply` and removes the backup directory. If you used `--git-branch`, you can also simply `git checkout <original-branch>`.
 
 ### Output Examples
 
@@ -310,6 +336,16 @@ larasense-limbo analyze --base main --fix --apply --yes
 ### Scan
 
 Full codebase audit — see [Scan (Full Codebase Audit)](#scan-full-codebase-audit) above for details.
+
+### Undo
+
+Revert all applied fixes to their original state:
+
+```bash
+larasense-limbo undo
+```
+
+Restores files from the backup created during `--fix --apply`. The backup is removed after a successful undo.
 
 ### Init
 
@@ -735,18 +771,22 @@ larasense-limbo/
 │   ├── root.go                      # Root CLI command
 │   ├── analyze.go                   # analyze subcommand + flags
 │   ├── scan.go                      # scan subcommand (full codebase audit)
+│   ├── fix.go                       # Shared fix output handler (--fix, --apply, --dry-run)
+│   ├── undo.go                      # undo subcommand (revert applied fixes)
 │   ├── init.go                      # init subcommand (config generator)
 │   └── version.go                   # version subcommand (build info)
 ├── internal/
 │   ├── config/config.go             # Viper YAML + env config loader
-│   ├── git/git.go                   # Git operations (exec)
+│   ├── git/git.go                   # Git operations (diff, show, branch)
 │   ├── diff/parser.go               # Git diff parser
 │   ├── context/builder.go           # Laravel-aware context builder
 │   ├── scanner/scanner.go           # Filesystem walker for full codebase scan
-│   ├── ai/client.go                 # AI provider HTTP client
+│   ├── ai/client.go                 # AI provider HTTP client + response parsers
+│   ├── fixer/fixer.go               # Auto-fix engine (apply, patch, undo, backup)
 │   ├── reviewer/
-│   │   ├── reviewer.go              # Pipeline orchestrator (diff + scan)
+│   │   ├── reviewer.go              # Pipeline orchestrator (diff + scan + fix)
 │   │   └── batcher.go               # Token-aware file batching
+│   ├── cache/cache.go               # SHA-256 file cache with issue + fix storage
 │   └── output/formatter.go          # Human + JSON + GitHub annotations output
 ├── .larasense-limbo.yml             # Example config
 ├── Dockerfile                       # Multi-stage container build
