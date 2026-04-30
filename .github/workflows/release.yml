@@ -32,3 +32,57 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  publish-npm:
+    name: Publish to npm
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Extract version from tag
+        id: version
+        run: |
+          VERSION="${GITHUB_REF#refs/tags/v}"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Publishing version: ${VERSION}"
+
+      - name: Verify GitHub Release assets exist
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          echo "Checking release assets for v${VERSION}..."
+
+          ASSETS=$(curl -fsSL \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/tags/v${VERSION}" \
+            | jq '.assets | length')
+
+          echo "Found ${ASSETS} assets"
+
+          if [ "${ASSETS}" -lt 6 ]; then
+            echo "::error::Expected at least 6 release assets, found ${ASSETS}. GoReleaser may not have finished."
+            exit 1
+          fi
+
+          echo "All release assets present"
+
+      - name: Update package.json version
+        working-directory: npm
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          npm version "${VERSION}" --no-git-tag-version --allow-same-version
+          echo "Updated package.json to version ${VERSION}"
+          cat package.json | jq '.version'
+
+      - name: Publish to npm
+        working-directory: npm
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
