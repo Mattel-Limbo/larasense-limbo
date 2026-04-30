@@ -23,3 +23,6 @@ vendor/
 
 # Config (contains secrets — use .larasense-limbo.yml.example as template)
 .larasense-limbo.yml
+
+# npm auth (contains tokens)
+.npmrc
