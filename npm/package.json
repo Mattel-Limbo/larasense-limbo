@@ -1,7 +1,7 @@
 {
   "name": "larasense-limbo",
-  "version": "0.5.1",
-  "description": "AI-powered code review CLI for Laravel projects. Detects security vulnerabilities, performance issues, bad practices — with auto-fix.",
+  "version": "0.5.2",
+  "description": "AI-powered code review CLI for Laravel projects. Detects security vulnerabilities, performance issues, and bad practices with auto-fix.",
   "keywords": [
     "laravel",
     "code-review",
@@ -22,7 +22,7 @@
   },
   "license": "MIT",
   "bin": {
-    "larasense-limbo": "./bin/cli.js"
+    "larasense-limbo": "bin/cli.js"
   },
   "scripts": {
     "postinstall": "node scripts/install.js"
