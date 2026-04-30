@@ -16,17 +16,20 @@ import (
 )
 
 var (
-	flagBase     string
-	flagHead     string
-	flagJSON     bool
-	flagFormat   string
-	flagVerbose  bool
-	flagNoCache  bool
-	flagGitHubPR string
+	flagBase      string
+	flagHead      string
+	flagJSON      bool
+	flagFormat    string
+	flagVerbose   bool
+	flagNoCache   bool
+	flagFresh     bool
+	flagGitHubPR  string
 	flagFix       bool
 	flagApply     bool
 	flagYes       bool
+	flagAuto      bool
 	flagDryRun    bool
+	flagPreview   bool
 	flagGitBranch string
 	flagPatch     string
 )
@@ -49,11 +52,14 @@ func init() {
 	analyzeCmd.Flags().StringVar(&flagFormat, "format", "human", "Output format: human, json, github")
 	analyzeCmd.Flags().BoolVar(&flagVerbose, "verbose", false, "Show detailed request/response logs for debugging")
 	analyzeCmd.Flags().BoolVar(&flagNoCache, "no-cache", false, "Skip cache and re-review all files")
+	analyzeCmd.Flags().BoolVar(&flagFresh, "fresh", false, "Skip cache and re-review all files (alias for --no-cache)")
 	analyzeCmd.Flags().StringVar(&flagGitHubPR, "github-pr", "", "Post results as PR comment (format: owner/repo#number)")
 	analyzeCmd.Flags().BoolVar(&flagFix, "fix", false, "Generate code fix suggestions for issues")
 	analyzeCmd.Flags().BoolVar(&flagApply, "apply", false, "Apply fixes interactively — prompts y/n per fix (requires --fix)")
 	analyzeCmd.Flags().BoolVar(&flagYes, "yes", false, "Apply all fixes without prompting (requires --fix --apply)")
+	analyzeCmd.Flags().BoolVar(&flagAuto, "auto", false, "Generate fixes and apply all without prompting (alias for --fix --apply --yes)")
 	analyzeCmd.Flags().BoolVar(&flagDryRun, "dry-run", false, "Show what fixes would be applied without writing to files (requires --fix)")
+	analyzeCmd.Flags().BoolVar(&flagPreview, "preview", false, "Preview fixes without applying (alias for --fix --dry-run)")
 	analyzeCmd.Flags().StringVar(&flagGitBranch, "git-branch", "", "Create a git branch before applying fixes for easy revert (requires --fix --apply)")
 	analyzeCmd.Flags().StringVar(&flagPatch, "patch", "", "Write fixes as unified diff to file (requires --fix)")
 
@@ -61,6 +67,19 @@ func init() {
 }
 
 func runAnalyze(cmd *cobra.Command, args []string) error {
+	if flagAuto {
+		flagFix = true
+		flagApply = true
+		flagYes = true
+	}
+	if flagPreview {
+		flagFix = true
+		flagDryRun = true
+	}
+	if flagFresh {
+		flagNoCache = true
+	}
+
 	if flagApply && !flagFix {
 		return fmt.Errorf("--apply requires --fix")
 	}
@@ -71,7 +90,7 @@ func runAnalyze(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("--dry-run requires --fix")
 	}
 	if flagDryRun && flagApply {
-		return fmt.Errorf("--dry-run and --apply cannot be used together")
+		return fmt.Errorf("--dry-run/--preview and --apply/--auto cannot be used together")
 	}
 	if flagGitBranch != "" && !flagApply {
 		return fmt.Errorf("--git-branch requires --apply")

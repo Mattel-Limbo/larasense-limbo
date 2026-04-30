@@ -115,6 +115,36 @@ larasense-limbo scan
 
 ## Usage
 
+### Quick Shortcuts
+
+Common workflows simplified with aliases:
+
+```bash
+# Scan + auto-fix all (no prompting)
+larasense-limbo scan --auto                          # was: --fix --apply --yes
+larasense-limbo scan app/Http/Controllers --auto     # positional arg (auto-detect directory)
+larasense-limbo scan app/Models/User.php --auto      # positional arg (auto-detect file)
+
+# Preview fixes without applying
+larasense-limbo scan --preview                       # was: --fix --dry-run
+
+# Fresh scan (skip cache)
+larasense-limbo scan --auto --fresh                  # was: --fix --apply --yes --no-cache
+
+# Combine
+larasense-limbo scan --auto --fresh --git-branch auto
+larasense-limbo analyze --auto --fresh
+```
+
+| Alias | Equivalent | Description |
+|-------|-----------|-------------|
+| `--auto` | `--fix --apply --yes` | Generate fixes and apply all without prompting |
+| `--preview` | `--fix --dry-run` | Preview fixes without modifying files |
+| `--fresh` | `--no-cache` | Skip cache, re-scan/re-review all files |
+| `scan <path>` | `scan --path <path>` | Positional argument (auto-detects file vs directory) |
+
+> All original flags still work — aliases are shortcuts, not replacements.
+
 ### Analyze (Diff-Based Review)
 
 Review only changed files between two git refs:

@@ -66,7 +66,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 	fmt.Println("Next steps:")
 	fmt.Println("  1. Edit .larasense-limbo.yml — set your provider base_url, api_key, and model")
 	fmt.Println("  2. Add .larasense-limbo.yml to .gitignore (if it contains secrets)")
-	fmt.Println("  3. Run: larasense-limbo analyze")
+	fmt.Println("  3. Run: larasense-limbo analyze or larasense-limbo scan")
 
 	return nil
 }

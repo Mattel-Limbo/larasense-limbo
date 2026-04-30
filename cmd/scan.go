@@ -23,22 +23,28 @@ var (
 	flagScanFormat    string
 	flagScanVerbose   bool
 	flagScanNoCache   bool
+	flagScanFresh     bool
 	flagScanFix       bool
 	flagScanApply     bool
 	flagScanYes       bool
+	flagScanAuto      bool
 	flagScanDryRun    bool
+	flagScanPreview   bool
 	flagScanGitBranch string
 	flagScanPatch     string
 )
 
 var scanCmd = &cobra.Command{
-	Use:   "scan",
+	Use:   "scan [path|file...]",
 	Short: "Full codebase audit of all Laravel files",
 	Long: `Scan all Laravel files in the project (not just changed files) and
 send them to an AI provider for code review.
 
 Useful for initial adoption on existing projects or periodic full audits.
-Files are filtered using the same include/exclude patterns from config.`,
+Files are filtered using the same include/exclude patterns from config.
+
+Arguments are auto-detected: directories are scanned recursively,
+files are scanned individually.`,
 	RunE: runScan,
 }
 
@@ -50,10 +56,13 @@ func init() {
 	scanCmd.Flags().StringVar(&flagScanFormat, "format", "human", "Output format: human, json, github")
 	scanCmd.Flags().BoolVar(&flagScanVerbose, "verbose", false, "Show detailed request/response logs for debugging")
 	scanCmd.Flags().BoolVar(&flagScanNoCache, "no-cache", false, "Skip cache and re-scan all files")
+	scanCmd.Flags().BoolVar(&flagScanFresh, "fresh", false, "Skip cache and re-scan all files (alias for --no-cache)")
 	scanCmd.Flags().BoolVar(&flagScanFix, "fix", false, "Generate code fix suggestions for issues")
 	scanCmd.Flags().BoolVar(&flagScanApply, "apply", false, "Apply fixes interactively — prompts y/n per fix (requires --fix)")
 	scanCmd.Flags().BoolVar(&flagScanYes, "yes", false, "Apply all fixes without prompting (requires --fix --apply)")
+	scanCmd.Flags().BoolVar(&flagScanAuto, "auto", false, "Generate fixes and apply all without prompting (alias for --fix --apply --yes)")
 	scanCmd.Flags().BoolVar(&flagScanDryRun, "dry-run", false, "Show what fixes would be applied without writing to files (requires --fix)")
+	scanCmd.Flags().BoolVar(&flagScanPreview, "preview", false, "Preview fixes without applying (alias for --fix --dry-run)")
 	scanCmd.Flags().StringVar(&flagScanGitBranch, "git-branch", "", "Create a git branch before applying fixes for easy revert (requires --fix --apply)")
 	scanCmd.Flags().StringVar(&flagScanPatch, "patch", "", "Write fixes as unified diff to file (requires --fix)")
 
@@ -61,6 +70,37 @@ func init() {
 }
 
 func runScan(cmd *cobra.Command, args []string) error {
+	if flagScanAuto {
+		flagScanFix = true
+		flagScanApply = true
+		flagScanYes = true
+	}
+	if flagScanPreview {
+		flagScanFix = true
+		flagScanDryRun = true
+	}
+	if flagScanFresh {
+		flagScanNoCache = true
+	}
+
+	if len(args) > 0 && !flagScanModified {
+		var argFiles []string
+		for _, arg := range args {
+			info, err := os.Stat(arg)
+			if err != nil {
+				return fmt.Errorf("path not found: %s", arg)
+			}
+			if info.IsDir() {
+				flagScanPath = arg
+			} else {
+				argFiles = append(argFiles, arg)
+			}
+		}
+		if len(argFiles) > 0 {
+			flagScanFiles = append(flagScanFiles, argFiles...)
+		}
+	}
+
 	if flagScanApply && !flagScanFix {
 		return fmt.Errorf("--apply requires --fix")
 	}
@@ -71,7 +111,7 @@ func runScan(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("--dry-run requires --fix")
 	}
 	if flagScanDryRun && flagScanApply {
-		return fmt.Errorf("--dry-run and --apply cannot be used together")
+		return fmt.Errorf("--dry-run/--preview and --apply/--auto cannot be used together")
 	}
 	if flagScanGitBranch != "" && !flagScanApply {
 		return fmt.Errorf("--git-branch requires --apply")

@@ -118,7 +118,7 @@ Status tracking untuk fitur-fitur larasense-limbo.
 | 71 | Scan spesifik file (`--file`) | ✅ Done | `scan --file path/to/file.php`, repeatable, skips filters, hemat token |
 | 72 | Scan modified files (`--modified`) | ✅ Done | `scan --modified`, reads `git status --porcelain`, skips deleted, handles renames |
 | 73 | Logic/Semantic error detection | ✅ Done | HIGH: undefined variable, wrong variable in loop. MEDIUM: unreachable code, wrong comparison, type mismatch. LOW: dead code |
-| 74 | Flag aliases/simplification | 📋 Planned | `--auto` alias `--apply --yes`, `--preview` alias `--dry-run`, `--fresh` alias `--no-cache` |
+| 74 | Flag aliases/simplification | ✅ Done | `--auto` (fix+apply+yes), `--preview` (fix+dry-run), `--fresh` (no-cache), positional args auto-detect file/dir |
 | 75 | Terminal UI improvement | 📋 Planned | Progress counter `[12/47]`, better copywriting, batch ETA |
 
 ## Future Ideas
@@ -153,6 +153,6 @@ Status tracking untuk fitur-fitur larasense-limbo.
 | Planned Features | 8 | 0 | 0 |
 | New Features | 16 | 0 | 0 |
 | AI Fixer Enhancements | 14 | 0 | 0 |
-| Planned Ideas | 3 | 2 | 0 |
+| Planned Ideas | 4 | 1 | 0 |
 | Future Ideas | 0 | 0 | 14 |
-| **Total** | **73** | **2** | **14** |
+| **Total** | **74** | **1** | **14** |
