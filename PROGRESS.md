@@ -140,24 +140,32 @@ Status tracking untuk fitur-fitur larasense-limbo.
 | 88 | Missing return type | LOW | ✅ Done | Public method without return type declaration (PHP 8+) |
 | 89 | Deprecated API usage | LOW | ✅ Done | Using deprecated Laravel/PHP functions |
 
+## Distribution & Packaging
+
+| # | Fitur | Status | Catatan |
+|---|-------|--------|---------|
+| 90 | NPM package distribution | ✅ Done | `npm install -g larasense-limbo`, auto-download binary per OS/arch, postinstall script, bin wrapper |
+| 91 | Install script (curl) | ✅ Done | `curl -fsSL .../install.sh \| sh`, auto-detect OS/arch, VERSION/INSTALL_DIR env vars, sudo fallback, PATH check |
+| 92 | GitHub Action | ✅ Done | `uses: Mattel-Limbo/larasense-limbo/action@main`, composite action, cache via actions/cache, auto-detect OS/arch, version input |
+
 ## Future Ideas
 
 | # | Fitur | Status | Catatan |
 |---|-------|--------|---------|
-| 90 | Fix confidence score | 💡 Future | AI rate confidence per fix, skip low-confidence |
-| 91 | Multi-pass fix | 💡 Future | Re-run AI setelah fix applied untuk generate fix yang akurat terhadap state baru |
-| 92 | Fix dependency graph | 💡 Future | Detect fix A depends on fix B, apply in correct order |
-| 93 | Semantic diff display | 💡 Future | Syntax-highlighted diff di terminal |
-| 94 | Fix templates | 💡 Future | Pre-defined fix patterns tanpa AI (e.g., `Model::all()` → `Model::cursor()`) |
-| 95 | Multi-language support | 💡 Future | Vue/JS files di Laravel project |
-| 96 | Rule customization | 💡 Future | Enable/disable specific rule categories |
-| 97 | Baseline support | 💡 Future | Ignore existing issues, hanya report baru |
-| 98 | SARIF output | 💡 Future | Standard format untuk security tools |
-| 99 | VS Code extension | 💡 Future | Real-time review di editor |
-| 100 | Pre-commit hook | 💡 Future | Review otomatis sebelum commit |
-| 101 | Team config sharing | 💡 Future | Shared config via package registry |
-| 102 | Review history/analytics | 💡 Future | Track issue trends over time |
-| 103 | Plugin system | 💡 Future | Custom analyzers via Go plugins |
+| 93 | Fix confidence score | 💡 Future | AI rate confidence per fix, skip low-confidence |
+| 94 | Multi-pass fix | 💡 Future | Re-run AI setelah fix applied untuk generate fix yang akurat terhadap state baru |
+| 95 | Fix dependency graph | 💡 Future | Detect fix A depends on fix B, apply in correct order |
+| 96 | Semantic diff display | 💡 Future | Syntax-highlighted diff di terminal |
+| 97 | Fix templates | 💡 Future | Pre-defined fix patterns tanpa AI (e.g., `Model::all()` → `Model::cursor()`) |
+| 98 | Multi-language support | 💡 Future | Vue/JS files di Laravel project |
+| 99 | Rule customization | 💡 Future | Enable/disable specific rule categories |
+| 100 | Baseline support | 💡 Future | Ignore existing issues, hanya report baru |
+| 101 | SARIF output | 💡 Future | Standard format untuk security tools |
+| 102 | VS Code extension | 💡 Future | Real-time review di editor |
+| 103 | Pre-commit hook | 💡 Future | Review otomatis sebelum commit |
+| 104 | Team config sharing | 💡 Future | Shared config via package registry |
+| 105 | Review history/analytics | 💡 Future | Track issue trends over time |
+| 106 | Plugin system | 💡 Future | Custom analyzers via Go plugins |
 
 ---
 
@@ -174,5 +182,6 @@ Status tracking untuk fitur-fitur larasense-limbo.
 | AI Fixer Enhancements | 14 | 0 | 0 |
 | Planned Ideas | 5 | 0 | 0 |
 | Detection Coverage | 14 | 0 | 0 |
+| Distribution & Packaging | 3 | 0 | 0 |
 | Future Ideas | 0 | 0 | 14 |
-| **Total** | **89** | **0** | **14** |
+| **Total** | **92** | **0** | **14** |
