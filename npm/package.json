@@ -1,0 +1,48 @@
+{
+  "name": "larasense-limbo",
+  "version": "0.5.1",
+  "description": "AI-powered code review CLI for Laravel projects. Detects security vulnerabilities, performance issues, bad practices — with auto-fix.",
+  "keywords": [
+    "laravel",
+    "code-review",
+    "linter",
+    "ai",
+    "security",
+    "php",
+    "static-analysis",
+    "auto-fix"
+  ],
+  "homepage": "https://github.com/Mattel-Limbo/larasense-limbo",
+  "bugs": {
+    "url": "https://github.com/Mattel-Limbo/larasense-limbo/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Mattel-Limbo/larasense-limbo.git"
+  },
+  "license": "MIT",
+  "bin": {
+    "larasense-limbo": "./bin/cli.js"
+  },
+  "scripts": {
+    "postinstall": "node scripts/install.js"
+  },
+  "files": [
+    "bin/",
+    "scripts/",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=16"
+  },
+  "os": [
+    "darwin",
+    "linux",
+    "win32"
+  ],
+  "cpu": [
+    "x64",
+    "arm64"
+  ]
+}

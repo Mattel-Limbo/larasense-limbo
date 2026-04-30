@@ -1,0 +1,168 @@
+name: "Setup Larasense Limbo"
+description: "Download and cache the larasense-limbo CLI binary for AI-powered Laravel code review"
+author: "Mattel-Limbo"
+
+branding:
+  icon: "search"
+  color: "purple"
+
+inputs:
+  version:
+    description: "Version to install (e.g. '0.5.1'). Defaults to 'latest'."
+    required: false
+    default: "latest"
+  github-token:
+    description: "GitHub token for fetching latest release version (avoids rate limits). Defaults to github.token."
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  version:
+    description: "The installed version of larasense-limbo"
+    value: ${{ steps.version.outputs.version }}
+  path:
+    description: "Path to the installed binary"
+    value: ${{ steps.install.outputs.path }}
+
+runs:
+  using: "composite"
+  steps:
+    # ── Resolve version ──────────────────────────────────────────────────
+    - name: Resolve version
+      id: version
+      shell: bash
+      env:
+        INPUT_VERSION: ${{ inputs.version }}
+        GH_TOKEN: ${{ inputs.github-token }}
+      run: |
+        if [ "${INPUT_VERSION}" = "latest" ]; then
+          echo "Fetching latest release version..."
+          VERSION=$(curl -fsSL \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/Mattel-Limbo/larasense-limbo/releases/latest" \
+            | grep '"tag_name"' | sed -E 's/.*"v?([^"]+)".*/\1/')
+
+          if [ -z "${VERSION}" ]; then
+            echo "::error::Failed to fetch latest version from GitHub API"
+            exit 1
+          fi
+          echo "Resolved latest version: ${VERSION}"
+        else
+          VERSION="${INPUT_VERSION}"
+          # Strip leading 'v' if present
+          VERSION="${VERSION#v}"
+          echo "Using specified version: ${VERSION}"
+        fi
+
+        echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+    # ── Determine platform & arch ────────────────────────────────────────
+    - name: Determine platform
+      id: platform
+      shell: bash
+      run: |
+        OS="${{ runner.os }}"
+        ARCH="${{ runner.arch }}"
+
+        case "${OS}" in
+          Linux)   PLATFORM="linux" ;;
+          macOS)   PLATFORM="darwin" ;;
+          Windows) PLATFORM="windows" ;;
+          *)
+            echo "::error::Unsupported OS: ${OS}"
+            exit 1
+            ;;
+        esac
+
+        case "${ARCH}" in
+          X64)   GOARCH="amd64" ;;
+          ARM64) GOARCH="arm64" ;;
+          *)
+            echo "::error::Unsupported architecture: ${ARCH}"
+            exit 1
+            ;;
+        esac
+
+        EXT="tar.gz"
+        if [ "${PLATFORM}" = "windows" ]; then
+          EXT="zip"
+        fi
+
+        BINARY="larasense-limbo"
+        if [ "${PLATFORM}" = "windows" ]; then
+          BINARY="larasense-limbo.exe"
+        fi
+
+        echo "platform=${PLATFORM}" >> "$GITHUB_OUTPUT"
+        echo "arch=${GOARCH}" >> "$GITHUB_OUTPUT"
+        echo "ext=${EXT}" >> "$GITHUB_OUTPUT"
+        echo "binary=${BINARY}" >> "$GITHUB_OUTPUT"
+
+        FILENAME="larasense-limbo_${{ steps.version.outputs.version }}_${PLATFORM}_${GOARCH}.${EXT}"
+        echo "filename=${FILENAME}" >> "$GITHUB_OUTPUT"
+        echo "Platform: ${PLATFORM}-${GOARCH}, Archive: ${FILENAME}"
+
+    # ── Cache binary ─────────────────────────────────────────────────────
+    - name: Cache binary
+      id: cache
+      uses: actions/cache@v4
+      with:
+        path: ${{ runner.tool_cache }}/larasense-limbo
+        key: larasense-limbo-${{ steps.version.outputs.version }}-${{ steps.platform.outputs.platform }}-${{ steps.platform.outputs.arch }}
+
+    # ── Download & extract ───────────────────────────────────────────────
+    - name: Download and extract
+      if: steps.cache.outputs.cache-hit != 'true'
+      shell: bash
+      env:
+        VERSION: ${{ steps.version.outputs.version }}
+        FILENAME: ${{ steps.platform.outputs.filename }}
+        EXT: ${{ steps.platform.outputs.ext }}
+        BINARY: ${{ steps.platform.outputs.binary }}
+        TOOL_CACHE: ${{ runner.tool_cache }}
+      run: |
+        INSTALL_DIR="${TOOL_CACHE}/larasense-limbo"
+        mkdir -p "${INSTALL_DIR}"
+
+        URL="https://github.com/Mattel-Limbo/larasense-limbo/releases/download/v${VERSION}/${FILENAME}"
+        echo "Downloading: ${URL}"
+
+        TMPDIR=$(mktemp -d)
+        curl -fsSL -o "${TMPDIR}/${FILENAME}" "${URL}"
+
+        if [ "${EXT}" = "zip" ]; then
+          unzip -qo "${TMPDIR}/${FILENAME}" -d "${TMPDIR}/extract"
+        else
+          mkdir -p "${TMPDIR}/extract"
+          tar -xzf "${TMPDIR}/${FILENAME}" -C "${TMPDIR}/extract"
+        fi
+
+        # Find and move binary
+        FOUND=$(find "${TMPDIR}/extract" -name "${BINARY}" -type f | head -1)
+        if [ -z "${FOUND}" ]; then
+          echo "::error::Binary '${BINARY}' not found in archive"
+          exit 1
+        fi
+
+        cp "${FOUND}" "${INSTALL_DIR}/${BINARY}"
+        chmod +x "${INSTALL_DIR}/${BINARY}"
+        rm -rf "${TMPDIR}"
+
+        echo "Installed to: ${INSTALL_DIR}/${BINARY}"
+
+    # ── Add to PATH & verify ─────────────────────────────────────────────
+    - name: Add to PATH and verify
+      id: install
+      shell: bash
+      env:
+        TOOL_CACHE: ${{ runner.tool_cache }}
+        BINARY: ${{ steps.platform.outputs.binary }}
+      run: |
+        INSTALL_DIR="${TOOL_CACHE}/larasense-limbo"
+        echo "${INSTALL_DIR}" >> "$GITHUB_PATH"
+        echo "path=${INSTALL_DIR}/${BINARY}" >> "$GITHUB_OUTPUT"
+
+        # Verify
+        VERSION_OUTPUT=$("${INSTALL_DIR}/${BINARY}" version 2>&1 | head -1)
+        echo "Installed: ${VERSION_OUTPUT}"

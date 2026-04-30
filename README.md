@@ -30,13 +30,77 @@ AI-powered code review CLI for Laravel projects. Analyzes git diffs **or scans y
 
 ## Requirements
 
-- Go 1.21+ (for building from source)
 - Git (accessible via `PATH`)
 - An OpenAI-compatible API key
+- Node.js 16+ (for npm install) **or** Go 1.21+ (for building from source)
 
 ## Installation
 
+### npm / bun / pnpm (Recommended)
+
+No Go required. The npm package automatically downloads the correct pre-built binary for your platform:
+
+```bash
+# npm
+npm install -g larasense-limbo
+
+# bun
+bun add -g larasense-limbo
+
+# pnpm
+pnpm add -g larasense-limbo
+
+# Or run without installing:
+npx larasense-limbo scan
+```
+
+**Update:**
+
+```bash
+npm update -g larasense-limbo
+```
+
+**Uninstall:**
+
+```bash
+npm uninstall -g larasense-limbo
+```
+
+### Install Script (curl)
+
+One-liner for Linux/macOS — no Node.js or Go required:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Mattel-Limbo/larasense-limbo/main/install.sh | sh
+```
+
+**Options:**
+
+```bash
+# Install a specific version
+VERSION=0.5.1 curl -fsSL https://raw.githubusercontent.com/Mattel-Limbo/larasense-limbo/main/install.sh | sh
+
+# Custom install directory
+INSTALL_DIR=/opt/bin curl -fsSL https://raw.githubusercontent.com/Mattel-Limbo/larasense-limbo/main/install.sh | sh
+```
+
+The script auto-detects your OS and architecture, downloads the correct binary from GitHub Releases, and installs it to `~/.local/bin` (or `/usr/local/bin` if writable). Works on Linux, macOS, and Windows (Git Bash/MSYS2).
+
+### Download Binary
+
+Download pre-built binaries from [GitHub Releases](https://github.com/Mattel-Limbo/larasense-limbo/releases).
+
+Available for: Linux, macOS, Windows (amd64 & arm64).
+
 ### From Source
+
+Requires Go 1.21+:
+
+```bash
+go install github.com/Mattel-Limbo/larasense-limbo@latest
+```
+
+Or build manually:
 
 ```bash
 git clone https://github.com/Mattel-Limbo/larasense-limbo.git
@@ -736,12 +800,12 @@ The tool automatically classifies changed files into 18 Laravel component types 
 
 ## CI/CD Integration
 
-### GitHub Actions (with inline annotations)
+### GitHub Actions (Recommended)
 
-Use `--format github` to get inline annotations directly on PR files:
+Use the official setup action — handles download, caching, and PATH setup automatically:
 
 ```yaml
-name: Laravel Code Review
+name: AI Code Review
 
 on:
   pull_request:
@@ -755,12 +819,8 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-go@v5
-        with:
-          go-version: '1.23'
-
-      - name: Install larasense-limbo
-        run: go install github.com/Mattel-Limbo/larasense-limbo@latest
+      - name: Setup larasense-limbo
+        uses: Mattel-Limbo/larasense-limbo/action@main
 
       - name: Run AI Code Review
         env:
@@ -776,6 +836,47 @@ This produces inline annotations on the PR:
 - `high` severity → `::error` (red)
 - `medium` severity → `::warning` (yellow)
 - `low` severity → `::notice` (blue)
+
+#### Pin to a specific version
+
+```yaml
+      - uses: Mattel-Limbo/larasense-limbo/action@main
+        with:
+          version: "0.5.1"
+```
+
+#### With PR comment
+
+Add `--github-pr` to also post a summary comment on the PR conversation:
+
+```yaml
+      - name: Run AI Code Review
+        env:
+          AI_API_KEY: ${{ secrets.AI_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          larasense-limbo analyze \
+            --base origin/${{ github.base_ref }} \
+            --head ${{ github.sha }} \
+            --format github \
+            --github-pr ${{ github.repository }}#${{ github.event.pull_request.number }}
+```
+
+This gives you **both** inline annotations on the diff **and** a summary comment in the PR conversation.
+
+### GitHub Actions (alternative: npm install)
+
+If you prefer not to use the setup action:
+
+```yaml
+      - name: Install larasense-limbo
+        run: npm install -g larasense-limbo
+
+      - name: Run AI Code Review
+        env:
+          AI_API_KEY: ${{ secrets.AI_API_KEY }}
+        run: larasense-limbo analyze --base origin/${{ github.base_ref }} --format github
+```
 
 ### Docker
 
