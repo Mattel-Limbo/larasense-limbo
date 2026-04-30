@@ -23,7 +23,7 @@ func FormatHuman(result *reviewer.Result) string {
 
 	sb.WriteString("\n")
 	sb.WriteString("╔══════════════════════════════════════════════════════════════╗\n")
-	sb.WriteString("║              Laravel AI Code Review Results                 ║\n")
+	sb.WriteString("║              Larasense Limbo Code Review Results             ║\n")
 	sb.WriteString("╚══════════════════════════════════════════════════════════════╝\n")
 	sb.WriteString("\n")
 

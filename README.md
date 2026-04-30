@@ -336,7 +336,7 @@ This restores files from the backup created during `--apply` and removes the bac
 
 ```
 ╔══════════════════════════════════════════════════════════════╗
-║              Laravel AI Code Review Results                 ║
+║              Larasense Limbo Code Review Results                   ║
 ╚══════════════════════════════════════════════════════════════╝
 
   Reviewed 3 file(s). Found 2 issue(s): 1 high, 1 medium, 0 low.

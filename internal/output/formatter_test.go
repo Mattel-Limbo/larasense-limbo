@@ -91,7 +91,7 @@ func TestFormatHuman_WithIssues(t *testing.T) {
 	out := FormatHuman(result)
 
 	// Should contain header
-	if !strings.Contains(out, "Laravel AI Code Review Results") {
+	if !strings.Contains(out, "Larasense Limbo Code Review Results") {
 		t.Error("should contain header")
 	}
 
