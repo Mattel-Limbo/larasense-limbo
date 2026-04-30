@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -195,6 +196,11 @@ func ApplyFixes(issues []ai.Issue, mode ApplyMode, reader io.Reader) (*ApplyResu
 		}
 
 		appliedRanges = append(appliedRanges, [2]int{f.StartLine, endLine})
+
+		// Backup original file before first modification
+		if err := backupFile(file); err != nil {
+			log.Printf("[warning] could not backup %s: %v", file, err)
+		}
 
 		afterLines := strings.Split(f.After, "\n")
 		newLines := make([]string, 0, len(lines)-(endLine-f.StartLine+1)+len(afterLines))
@@ -478,4 +484,70 @@ func sortFixesDesc(issues []ai.Issue) {
 	sort.Slice(issues, func(i, j int) bool {
 		return issues[i].Fix.StartLine > issues[j].Fix.StartLine
 	})
+}
+
+const backupDir = ".larasense-limbo-backup"
+
+// backupFile saves a copy of the file before modification.
+// Only backs up once per file — skips if backup already exists.
+func backupFile(filePath string) error {
+	backupPath := filepath.Join(backupDir, filePath)
+
+	if _, err := os.Stat(backupPath); err == nil {
+		return nil
+	}
+
+	if err := os.MkdirAll(filepath.Dir(backupPath), 0755); err != nil {
+		return err
+	}
+
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(backupPath, content, 0644)
+}
+
+func UndoFixes() ([]string, error) {
+	if _, err := os.Stat(backupDir); os.IsNotExist(err) {
+		return nil, fmt.Errorf("no backup found — nothing to undo")
+	}
+
+	var restored []string
+
+	err := filepath.WalkDir(backupDir, func(path string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+
+		relPath, err := filepath.Rel(backupDir, path)
+		if err != nil {
+			return err
+		}
+
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return fmt.Errorf("reading backup %s: %w", relPath, err)
+		}
+
+		if err := os.WriteFile(relPath, content, 0644); err != nil {
+			return fmt.Errorf("restoring %s: %w", relPath, err)
+		}
+
+		restored = append(restored, relPath)
+		return nil
+	})
+
+	if err != nil {
+		return restored, err
+	}
+
+	os.RemoveAll(backupDir)
+	return restored, nil
+}
+
+func HasBackup() bool {
+	info, err := os.Stat(backupDir)
+	return err == nil && info.IsDir()
 }

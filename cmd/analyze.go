@@ -23,11 +23,12 @@ var (
 	flagVerbose  bool
 	flagNoCache  bool
 	flagGitHubPR string
-	flagFix      bool
-	flagApply    bool
-	flagYes      bool
-	flagDryRun   bool
-	flagPatch    string
+	flagFix       bool
+	flagApply     bool
+	flagYes       bool
+	flagDryRun    bool
+	flagGitBranch string
+	flagPatch     string
 )
 
 var analyzeCmd = &cobra.Command{
@@ -53,6 +54,7 @@ func init() {
 	analyzeCmd.Flags().BoolVar(&flagApply, "apply", false, "Apply fixes interactively — prompts y/n per fix (requires --fix)")
 	analyzeCmd.Flags().BoolVar(&flagYes, "yes", false, "Apply all fixes without prompting (requires --fix --apply)")
 	analyzeCmd.Flags().BoolVar(&flagDryRun, "dry-run", false, "Show what fixes would be applied without writing to files (requires --fix)")
+	analyzeCmd.Flags().StringVar(&flagGitBranch, "git-branch", "", "Create a git branch before applying fixes for easy revert (requires --fix --apply)")
 	analyzeCmd.Flags().StringVar(&flagPatch, "patch", "", "Write fixes as unified diff to file (requires --fix)")
 
 	rootCmd.AddCommand(analyzeCmd)
@@ -70,6 +72,9 @@ func runAnalyze(cmd *cobra.Command, args []string) error {
 	}
 	if flagDryRun && flagApply {
 		return fmt.Errorf("--dry-run and --apply cannot be used together")
+	}
+	if flagGitBranch != "" && !flagApply {
+		return fmt.Errorf("--git-branch requires --apply")
 	}
 	if flagPatch != "" && !flagFix {
 		return fmt.Errorf("--patch requires --fix")
@@ -107,7 +112,7 @@ func runAnalyze(cmd *cobra.Command, args []string) error {
 		fmt.Fprint(os.Stdout, output.FormatHuman(result))
 	}
 
-	if err := handleFixOutput(result, flagFix, flagApply, flagYes, flagDryRun, flagPatch); err != nil {
+	if err := handleFixOutput(result, flagFix, flagApply, flagYes, flagDryRun, flagGitBranch, flagPatch); err != nil {
 		return err
 	}
 

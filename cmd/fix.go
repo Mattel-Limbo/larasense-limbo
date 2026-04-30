@@ -4,12 +4,14 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"time"
 
 	"github.com/Mattel-Limbo/larasense-limbo/internal/fixer"
+	"github.com/Mattel-Limbo/larasense-limbo/internal/git"
 	"github.com/Mattel-Limbo/larasense-limbo/internal/reviewer"
 )
 
-func handleFixOutput(result *reviewer.Result, fix, apply, yes, dryRun bool, patchPath string) error {
+func handleFixOutput(result *reviewer.Result, fix, apply, yes, dryRun bool, gitBranch, patchPath string) error {
 	if !fix {
 		return nil
 	}
@@ -41,6 +43,16 @@ func handleFixOutput(result *reviewer.Result, fix, apply, yes, dryRun bool, patc
 	}
 
 	if apply {
+		var originalBranch string
+
+		if gitBranch != "" {
+			var err error
+			originalBranch, err = setupGitBranch(gitBranch)
+			if err != nil {
+				return err
+			}
+		}
+
 		mode := fixer.ApplyInteractive
 		if yes {
 			mode = fixer.ApplyAll
@@ -66,9 +78,37 @@ func handleFixOutput(result *reviewer.Result, fix, apply, yes, dryRun bool, patc
 		}
 
 		printFixSummary(applyResult, fixable)
+
+		if originalBranch != "" && len(applyResult.Applied) > 0 {
+			fmt.Printf("  🌿 Fixes applied on branch: %s\n", gitBranch)
+			fmt.Printf("     To revert: git checkout %s\n", originalBranch)
+			fmt.Printf("     To review: git diff %s...%s\n\n", originalBranch, gitBranch)
+		}
 	}
 
 	return nil
+}
+
+func setupGitBranch(branchName string) (originalBranch string, err error) {
+	if !git.IsCleanWorkingTree() {
+		return "", fmt.Errorf("working tree has uncommitted changes — commit or stash before using --git-branch")
+	}
+
+	originalBranch, err = git.GetCurrentBranch()
+	if err != nil {
+		return "", fmt.Errorf("cannot determine current branch: %w", err)
+	}
+
+	if branchName == "auto" {
+		branchName = fmt.Sprintf("larasense-fix/%s", time.Now().Format("2006-01-02-150405"))
+	}
+
+	if err := git.CreateAndCheckoutBranch(branchName); err != nil {
+		return "", fmt.Errorf("creating fix branch: %w", err)
+	}
+
+	log.Printf("Created and switched to branch: %s", branchName)
+	return originalBranch, nil
 }
 
 func printFixSummary(result *fixer.ApplyResult, totalFixable int) {

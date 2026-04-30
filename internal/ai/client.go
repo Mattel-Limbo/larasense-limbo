@@ -17,7 +17,15 @@ const (
 	defaultTimeout    = 120 * time.Second
 	maxRetries        = 3
 	retryBaseDelay    = 2 * time.Second
+	maxTokensCap      = 65536
 )
+
+type truncatedError struct {
+	partialResponse *Response
+	message         string
+}
+
+func (e *truncatedError) Error() string { return e.message }
 
 // Client handles communication with the AI provider API.
 type Client struct {
@@ -158,7 +166,6 @@ func (c *Client) send(systemPrompt, userContent string) (*Response, error) {
 		return nil, fmt.Errorf("marshaling request: %w", err)
 	}
 
-	// Retry loop with exponential backoff
 	var lastErr error
 	for attempt := 0; attempt < maxRetries; attempt++ {
 		if attempt > 0 {
@@ -168,6 +175,20 @@ func (c *Client) send(systemPrompt, userContent string) (*Response, error) {
 
 		resp, err := c.doRequest(jsonBody)
 		if err != nil {
+			// On truncation: retry once with 2x max_tokens
+			if te, ok := err.(*truncatedError); ok {
+				doubled := effectiveMaxTokens * 2
+				if doubled > maxTokensCap {
+					doubled = maxTokensCap
+				}
+				if doubled > effectiveMaxTokens {
+					log.Printf("[retry] Response truncated — retrying with max_tokens %d → %d", effectiveMaxTokens, doubled)
+					jsonBody = c.rebuildRequestBody(systemPrompt, userContent, tempPtr, seedPtr, doubled, endpoint)
+					effectiveMaxTokens = doubled
+					lastErr = te
+					continue
+				}
+			}
 			lastErr = err
 			continue
 		}
@@ -175,6 +196,35 @@ func (c *Client) send(systemPrompt, userContent string) (*Response, error) {
 	}
 
 	return nil, fmt.Errorf("AI request failed after %d attempts: %w", maxRetries, lastErr)
+}
+
+func (c *Client) rebuildRequestBody(systemPrompt, userContent string, temp *float64, seed *int, maxTokens int, endpoint string) []byte {
+	var jsonBody []byte
+	if endpoint == "responses" {
+		reqBody := responsesRequest{
+			Model:        c.cfg.Model,
+			Instructions: systemPrompt,
+			Input:        userContent,
+			MaxTokens:    maxTokens,
+			Temperature:  temp,
+			Seed:         seed,
+		}
+		jsonBody, _ = json.Marshal(reqBody)
+	} else {
+		reqBody := chatRequest{
+			Model: c.cfg.Model,
+			Messages: []chatMessage{
+				{Role: "system", Content: systemPrompt},
+				{Role: "user", Content: userContent},
+			},
+			MaxTokens:      maxTokens,
+			Temperature:    temp,
+			Seed:           seed,
+			ResponseFormat: &responseFormat{Type: "json_object"},
+		}
+		jsonBody, _ = json.Marshal(reqBody)
+	}
+	return jsonBody
 }
 
 // doRequest performs a single HTTP request to the AI provider.
@@ -293,14 +343,16 @@ func extractContent(body []byte, userContent ...string) (*Response, error) {
 			return resp, nil
 		}
 
-		// If response was truncated (finish_reason: "length"), try to repair JSON
-		if truncated {
+			if truncated {
 			if repaired := repairTruncatedJSON(rawText); repaired != "" {
 				resp, err = parseIssuesFromText(repaired)
 				if err == nil {
-					log.Printf("[warning] AI response was truncated — parsed %d issue(s) from partial response. Consider increasing max_tokens in config.", len(resp.Issues))
+					log.Printf("[warning] AI response was truncated — parsed %d issue(s) from partial response", len(resp.Issues))
 					return resp, nil
 				}
+			}
+			return nil, &truncatedError{
+				message: fmt.Sprintf("AI response truncated (finish_reason: length) — increase max_tokens (raw: %s)", truncate(rawText, 200)),
 			}
 		}
 	}

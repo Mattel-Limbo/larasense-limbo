@@ -78,12 +78,12 @@ Progress tracking untuk perbaikan dan peningkatan fitur `--fix --apply` pada lar
 
 | # | Fitur | Status | Catatan |
 |---|-------|--------|---------|
-| 1 | Retry with higher `max_tokens` on truncation | 📋 Planned | Auto-retry saat `finish_reason: "length"` dengan 2x token budget |
+| 1 | Retry with higher `max_tokens` on truncation | ✅ Done | Auto-retry saat `finish_reason: "length"` dengan 2x token budget, cap at 65536 |
 | 2 | Dry-run mode (`--fix --dry-run`) | ✅ Done | Show what would be applied tanpa mengubah file, colored diff preview, summary at end |
-| 3 | Undo/rollback support | 📋 Planned | Backup file sebelum apply, `--undo` untuk revert |
+| 3 | Undo/rollback support | ✅ Done | Auto-backup sebelum apply, `larasense-limbo undo` command, backup cleanup setelah restore |
 | 4 | Fix confidence score | 📋 Planned | AI rate confidence per fix, skip low-confidence |
 | 5 | Batch fix summary | ✅ Done | Summary tabel di akhir: total fixable, applied, skipped + breakdown by skip reason |
-| 6 | Git-aware apply | 📋 Planned | Auto-create branch sebelum apply, easy revert via `git checkout` |
+| 6 | Git-aware apply | ✅ Done | `--git-branch name` or `--git-branch auto`, creates branch before apply, shows revert instructions |
 
 ## Future Ideas
 

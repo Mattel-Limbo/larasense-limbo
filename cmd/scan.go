@@ -19,11 +19,12 @@ var (
 	flagScanFormat  string
 	flagScanVerbose bool
 	flagScanNoCache bool
-	flagScanFix     bool
-	flagScanApply   bool
-	flagScanYes     bool
-	flagScanDryRun  bool
-	flagScanPatch   string
+	flagScanFix       bool
+	flagScanApply     bool
+	flagScanYes       bool
+	flagScanDryRun    bool
+	flagScanGitBranch string
+	flagScanPatch     string
 )
 
 var scanCmd = &cobra.Command{
@@ -47,6 +48,7 @@ func init() {
 	scanCmd.Flags().BoolVar(&flagScanApply, "apply", false, "Apply fixes interactively — prompts y/n per fix (requires --fix)")
 	scanCmd.Flags().BoolVar(&flagScanYes, "yes", false, "Apply all fixes without prompting (requires --fix --apply)")
 	scanCmd.Flags().BoolVar(&flagScanDryRun, "dry-run", false, "Show what fixes would be applied without writing to files (requires --fix)")
+	scanCmd.Flags().StringVar(&flagScanGitBranch, "git-branch", "", "Create a git branch before applying fixes for easy revert (requires --fix --apply)")
 	scanCmd.Flags().StringVar(&flagScanPatch, "patch", "", "Write fixes as unified diff to file (requires --fix)")
 
 	rootCmd.AddCommand(scanCmd)
@@ -64,6 +66,9 @@ func runScan(cmd *cobra.Command, args []string) error {
 	}
 	if flagScanDryRun && flagScanApply {
 		return fmt.Errorf("--dry-run and --apply cannot be used together")
+	}
+	if flagScanGitBranch != "" && !flagScanApply {
+		return fmt.Errorf("--git-branch requires --apply")
 	}
 	if flagScanPatch != "" && !flagScanFix {
 		return fmt.Errorf("--patch requires --fix")
@@ -114,7 +119,7 @@ func runScan(cmd *cobra.Command, args []string) error {
 		fmt.Fprint(os.Stdout, output.FormatHuman(result))
 	}
 
-	if err := handleFixOutput(result, flagScanFix, flagScanApply, flagScanYes, flagScanDryRun, flagScanPatch); err != nil {
+	if err := handleFixOutput(result, flagScanFix, flagScanApply, flagScanYes, flagScanDryRun, flagScanGitBranch, flagScanPatch); err != nil {
 		return err
 	}
 
