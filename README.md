@@ -168,6 +168,10 @@ larasense-limbo scan --path /path/to/laravel-project
 larasense-limbo scan --file app/Http/Controllers/UserController.php
 larasense-limbo scan --file app/Models/User.php --file routes/web.php
 
+# Scan only modified/staged files from git status (pre-commit workflow)
+larasense-limbo scan --modified
+larasense-limbo scan --modified --fix --apply
+
 # Combine with fix
 larasense-limbo scan --file app/Traits/Auditable.php --fix --apply
 
@@ -187,6 +191,7 @@ larasense-limbo scan --no-cache
 |------|------|---------|-------------|
 | `--path` | string | `.` | Root directory to scan |
 | `--file` | strings | | Scan specific file(s) instead of directory (repeatable, skips include/exclude filters) |
+| `--modified` | bool | `false` | Scan only modified/staged files from `git status` (pre-commit workflow) |
 | `--json` | bool | `false` | Output results as JSON |
 | `--format` | string | `human` | Output format: `human`, `json`, `github` |
 | `--verbose` | bool | `false` | Show detailed AI request/response logs |

@@ -9,6 +9,7 @@ import (
 
 	"github.com/Mattel-Limbo/larasense-limbo/internal/config"
 	"github.com/Mattel-Limbo/larasense-limbo/internal/context"
+	"github.com/Mattel-Limbo/larasense-limbo/internal/git"
 	"github.com/Mattel-Limbo/larasense-limbo/internal/output"
 	"github.com/Mattel-Limbo/larasense-limbo/internal/reviewer"
 	"github.com/Mattel-Limbo/larasense-limbo/internal/scanner"
@@ -17,6 +18,7 @@ import (
 var (
 	flagScanPath      string
 	flagScanFiles     []string
+	flagScanModified  bool
 	flagScanJSON      bool
 	flagScanFormat    string
 	flagScanVerbose   bool
@@ -43,6 +45,7 @@ Files are filtered using the same include/exclude patterns from config.`,
 func init() {
 	scanCmd.Flags().StringVar(&flagScanPath, "path", ".", "Root directory to scan")
 	scanCmd.Flags().StringSliceVar(&flagScanFiles, "file", nil, "Scan specific file(s) instead of directory (repeatable)")
+	scanCmd.Flags().BoolVar(&flagScanModified, "modified", false, "Scan only modified/staged files from git status")
 	scanCmd.Flags().BoolVar(&flagScanJSON, "json", false, "Output results as JSON (shorthand for --format json)")
 	scanCmd.Flags().StringVar(&flagScanFormat, "format", "human", "Output format: human, json, github")
 	scanCmd.Flags().BoolVar(&flagScanVerbose, "verbose", false, "Show detailed request/response logs for debugging")
@@ -87,7 +90,21 @@ func runScan(cmd *cobra.Command, args []string) error {
 	s := scanner.New(cfg, flagScanPath)
 	var files []context.FileContext
 
-	if len(flagScanFiles) > 0 {
+	if flagScanModified {
+		modifiedPaths, gitErr := git.GetModifiedFiles()
+		if gitErr != nil {
+			return fmt.Errorf("getting modified files: %w", gitErr)
+		}
+		if len(modifiedPaths) == 0 {
+			fmt.Println("No modified files found in git working tree.")
+			return nil
+		}
+		log.Printf("Found %d modified file(s) from git status", len(modifiedPaths))
+		files, err = s.ScanFiles(modifiedPaths)
+		if err != nil {
+			return fmt.Errorf("scanning modified files: %w", err)
+		}
+	} else if len(flagScanFiles) > 0 {
 		log.Printf("Scanning %d specific file(s)", len(flagScanFiles))
 		files, err = s.ScanFiles(flagScanFiles)
 		if err != nil {
