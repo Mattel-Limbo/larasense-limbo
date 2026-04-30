@@ -1,0 +1,7 @@
+# Downloaded binaries (installed by postinstall)
+bin/larasense-limbo
+bin/larasense-limbo.exe
+
+# npm artifacts
+node_modules/
+*.tgz
