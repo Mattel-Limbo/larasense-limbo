@@ -893,26 +893,40 @@ HIGH (report if found):
 - XSS: {!! !!} or unescaped output with user-controlled data in Blade
 - Hardcoded secrets: API keys, passwords, tokens as string literals
 - Missing auth: public routes/controllers handling sensitive data without middleware
-- Null reference: calling methods on potentially null values (e.g. request()->route()->getName() without null check)
-- Undefined variable: using a variable that was never defined or assigned in current scope
-- Wrong variable in loop: loop iterates as $x but body references $y (different variable name)
+- Null reference: calling methods on potentially null values without null check
+- Undefined variable: using a variable never defined in current scope
+- Wrong variable in loop: loop iterates as $x but body references $y
+- Insecure file upload: no MIME/extension validation on uploaded files
+- CSRF missing: POST/PUT/DELETE form without @csrf or token verification
+- Open redirect: redirect($userInput) without URL whitelist
+- Debug in production: dd(), dump(), ray() calls left in code
+- Exposed env(): direct env() calls outside config/ files
 
 MEDIUM (report if found):
 - N+1 query: DB query inside foreach/loop without eager loading
-- Unbounded query: Model::all() or query without limit/pagination on large tables
-- Fat controller: controller method >30 lines with business logic not in service/action class
+- Unbounded query: Model::all() or query without limit/pagination
+- Fat controller: method >30 lines with business logic not in service class
 - Missing validation: store/update without Form Request or validate()
 - Double write: create() followed by immediate save() on same model
 - Missing error handling: external calls (HTTP, file, queue) without try/catch
 - Unreachable code: code after return/throw/exit that will never execute
-- Wrong comparison: using = instead of == or === in conditions, or inverted logic (e.g. && vs ||)
-- Type mismatch: passing wrong type to method (string where int expected, array where object expected)
+- Wrong comparison: = instead of == or === in conditions
+- Type mismatch: passing wrong type to method
+- Missing authorization: controller action without authorize(), Gate, or Policy
+- Missing DB transaction: multiple related DB writes without DB::transaction()
+- Queue without retry: Job class without $tries, $timeout, or $backoff
+- Raw DB with user input: DB::raw() or whereRaw() concatenating user input
+- Hardcoded env() in code: env() used outside config/ files (breaks config:cache)
 
 LOW (report if found):
 - Tight coupling: direct new ClassName() instead of dependency injection
 - Missing route model binding: manual Model::find($id) in controller
-- Naming violation: non-standard Laravel naming (controller not suffixed, model plural)
+- Naming violation: non-standard Laravel naming
 - Dead code: unused variables, unused imports, unreferenced private methods
+- Magic numbers: hardcoded numeric/string values instead of constants or enums
+- God model: Model with >20 relationships or >500 lines
+- Missing return type: public method without return type declaration
+- Deprecated API: using deprecated Laravel or PHP functions
 
 RULES:
 - Only report patterns found in CHANGED lines (+ lines in diff)
@@ -940,25 +954,39 @@ HIGH (report if found):
 - Hardcoded secrets: API keys, passwords, tokens as string literals
 - Missing auth: public routes/controllers handling sensitive data without middleware
 - Null reference: calling methods on potentially null values without null check
-- Undefined variable: using a variable that was never defined or assigned in current scope
-- Wrong variable in loop: loop iterates as $x but body references $y (different variable name)
+- Undefined variable: using a variable never defined in current scope
+- Wrong variable in loop: loop iterates as $x but body references $y
+- Insecure file upload: no MIME/extension validation on uploaded files
+- CSRF missing: POST/PUT/DELETE form without @csrf or token verification
+- Open redirect: redirect($userInput) without URL whitelist
+- Debug in production: dd(), dump(), ray() calls left in code
+- Exposed env(): direct env() calls outside config/ files
 
 MEDIUM (report if found):
 - N+1 query: DB query inside foreach/loop without eager loading
-- Unbounded query: Model::all() or query without limit/pagination on large tables
-- Fat controller: controller method >30 lines with business logic not in service/action class
+- Unbounded query: Model::all() or query without limit/pagination
+- Fat controller: method >30 lines with business logic not in service class
 - Missing validation: store/update without Form Request or validate()
 - Double write: create() followed by immediate save() on same model
 - Missing error handling: external calls (HTTP, file, queue) without try/catch
 - Unreachable code: code after return/throw/exit that will never execute
-- Wrong comparison: using = instead of == or === in conditions, or inverted logic (e.g. && vs ||)
-- Type mismatch: passing wrong type to method (string where int expected, array where object expected)
+- Wrong comparison: = instead of == or === in conditions
+- Type mismatch: passing wrong type to method
+- Missing authorization: controller action without authorize(), Gate, or Policy
+- Missing DB transaction: multiple related DB writes without DB::transaction()
+- Queue without retry: Job class without $tries, $timeout, or $backoff
+- Raw DB with user input: DB::raw() or whereRaw() concatenating user input
+- Hardcoded env() in code: env() used outside config/ files (breaks config:cache)
 
 LOW (report if found):
 - Tight coupling: direct new ClassName() instead of dependency injection
 - Missing route model binding: manual Model::find($id) in controller
-- Naming violation: non-standard Laravel naming (controller not suffixed, model plural)
+- Naming violation: non-standard Laravel naming
 - Dead code: unused variables, unused imports, unreferenced private methods
+- Magic numbers: hardcoded numeric/string values instead of constants or enums
+- God model: Model with >20 relationships or >500 lines
+- Missing return type: public method without return type declaration
+- Deprecated API: using deprecated Laravel or PHP functions
 
 RULES:
 - Scan entire file content

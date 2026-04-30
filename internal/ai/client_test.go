@@ -143,7 +143,7 @@ func TestBuildDiffPrompt(t *testing.T) {
 	if prompt == "" {
 		t.Error("expected non-empty prompt")
 	}
-	keywords := []string{"deterministic", "N+1", "Mass assignment", "SEVERITY IS FIXED", "HIGH", "MEDIUM", "LOW", "JSON", "Undefined variable", "Unreachable code", "Dead code"}
+	keywords := []string{"deterministic", "N+1", "Mass assignment", "SEVERITY IS FIXED", "HIGH", "MEDIUM", "LOW", "JSON", "Undefined variable", "Unreachable code", "Dead code", "Insecure file upload", "CSRF missing", "Open redirect", "Debug in production", "Exposed env()", "Missing authorization", "Missing DB transaction", "Queue without retry", "Raw DB with user input", "Magic numbers", "God model", "Missing return type", "Deprecated API"}
 	for _, kw := range keywords {
 		if !containsStr(prompt, kw) {
 			t.Errorf("diff prompt should contain %q", kw)
@@ -156,7 +156,7 @@ func TestBuildScanPrompt(t *testing.T) {
 	if prompt == "" {
 		t.Error("expected non-empty prompt")
 	}
-	keywords := []string{"deterministic", "entire file", "SEVERITY IS FIXED", "HIGH", "MEDIUM", "LOW", "JSON", "Undefined variable", "Unreachable code", "Dead code"}
+	keywords := []string{"deterministic", "entire file", "SEVERITY IS FIXED", "HIGH", "MEDIUM", "LOW", "JSON", "Undefined variable", "Unreachable code", "Dead code", "Insecure file upload", "CSRF missing", "Open redirect", "Debug in production", "Exposed env()", "Missing authorization", "Missing DB transaction", "Queue without retry", "Raw DB with user input", "Magic numbers", "God model", "Missing return type", "Deprecated API"}
 	for _, kw := range keywords {
 		if !containsStr(prompt, kw) {
 			t.Errorf("scan prompt should contain %q", kw)

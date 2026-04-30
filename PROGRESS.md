@@ -121,24 +121,43 @@ Status tracking untuk fitur-fitur larasense-limbo.
 | 74 | Flag aliases/simplification | ✅ Done | `--auto` (fix+apply+yes), `--preview` (fix+dry-run), `--fresh` (no-cache), positional args auto-detect file/dir |
 | 75 | Terminal UI improvement | ✅ Done | Progress bar in-place, header box (provider/target/mode), duration tracking, better skip messages, `internal/ui` package |
 
+## Detection Coverage Expansion
+
+| # | Pattern | Severity | Status | Catatan |
+|---|---------|----------|--------|---------|
+| 76 | Insecure file upload | HIGH | ✅ Done | No MIME/extension validation on uploaded files |
+| 77 | CSRF missing | HIGH | ✅ Done | POST/PUT/DELETE form without @csrf or token verification |
+| 78 | Open redirect | HIGH | ✅ Done | `redirect($userInput)` without URL whitelist |
+| 79 | Debug left in code | HIGH | ✅ Done | `dd()`, `dump()`, `ray()` calls left in production code |
+| 80 | Exposed env() in code | HIGH | ✅ Done | Direct `env()` calls outside config files (breaks config cache) |
+| 81 | Missing authorization | MEDIUM | ✅ Done | Controller action without `authorize()`, Gate, or Policy check |
+| 82 | Missing DB transaction | MEDIUM | ✅ Done | Multiple related DB writes without `DB::transaction()` |
+| 83 | Queue without retry config | MEDIUM | ✅ Done | Job class without `$tries`, `$timeout`, or `$backoff` |
+| 84 | Raw DB with user input | MEDIUM | ✅ Done | `DB::raw()` or `whereRaw()` concatenating user input |
+| 85 | Hardcoded env() in code | MEDIUM | ✅ Done | `env()` used outside `config/` files (breaks `config:cache`) |
+| 86 | Magic numbers/strings | LOW | ✅ Done | Hardcoded numeric/string values instead of constants or enums |
+| 87 | God model | LOW | ✅ Done | Model with >20 relationships or >500 lines |
+| 88 | Missing return type | LOW | ✅ Done | Public method without return type declaration (PHP 8+) |
+| 89 | Deprecated API usage | LOW | ✅ Done | Using deprecated Laravel/PHP functions |
+
 ## Future Ideas
 
 | # | Fitur | Status | Catatan |
 |---|-------|--------|---------|
-| 76 | Fix confidence score | 💡 Future | AI rate confidence per fix, skip low-confidence |
-| 77 | Multi-pass fix | 💡 Future | Re-run AI setelah fix applied untuk generate fix yang akurat terhadap state baru |
-| 78 | Fix dependency graph | 💡 Future | Detect fix A depends on fix B, apply in correct order |
-| 79 | Semantic diff display | 💡 Future | Syntax-highlighted diff di terminal |
-| 80 | Fix templates | 💡 Future | Pre-defined fix patterns tanpa AI (e.g., `Model::all()` → `Model::cursor()`) |
-| 81 | Multi-language support | 💡 Future | Vue/JS files di Laravel project |
-| 82 | Rule customization | 💡 Future | Enable/disable specific rule categories |
-| 83 | Baseline support | 💡 Future | Ignore existing issues, hanya report baru |
-| 84 | SARIF output | 💡 Future | Standard format untuk security tools |
-| 85 | VS Code extension | 💡 Future | Real-time review di editor |
-| 86 | Pre-commit hook | 💡 Future | Review otomatis sebelum commit |
-| 87 | Team config sharing | 💡 Future | Shared config via package registry |
-| 88 | Review history/analytics | 💡 Future | Track issue trends over time |
-| 89 | Plugin system | 💡 Future | Custom analyzers via Go plugins |
+| 90 | Fix confidence score | 💡 Future | AI rate confidence per fix, skip low-confidence |
+| 91 | Multi-pass fix | 💡 Future | Re-run AI setelah fix applied untuk generate fix yang akurat terhadap state baru |
+| 92 | Fix dependency graph | 💡 Future | Detect fix A depends on fix B, apply in correct order |
+| 93 | Semantic diff display | 💡 Future | Syntax-highlighted diff di terminal |
+| 94 | Fix templates | 💡 Future | Pre-defined fix patterns tanpa AI (e.g., `Model::all()` → `Model::cursor()`) |
+| 95 | Multi-language support | 💡 Future | Vue/JS files di Laravel project |
+| 96 | Rule customization | 💡 Future | Enable/disable specific rule categories |
+| 97 | Baseline support | 💡 Future | Ignore existing issues, hanya report baru |
+| 98 | SARIF output | 💡 Future | Standard format untuk security tools |
+| 99 | VS Code extension | 💡 Future | Real-time review di editor |
+| 100 | Pre-commit hook | 💡 Future | Review otomatis sebelum commit |
+| 101 | Team config sharing | 💡 Future | Shared config via package registry |
+| 102 | Review history/analytics | 💡 Future | Track issue trends over time |
+| 103 | Plugin system | 💡 Future | Custom analyzers via Go plugins |
 
 ---
 
@@ -154,5 +173,6 @@ Status tracking untuk fitur-fitur larasense-limbo.
 | New Features | 16 | 0 | 0 |
 | AI Fixer Enhancements | 14 | 0 | 0 |
 | Planned Ideas | 5 | 0 | 0 |
+| Detection Coverage | 14 | 0 | 0 |
 | Future Ideas | 0 | 0 | 14 |
-| **Total** | **75** | **0** | **14** |
+| **Total** | **89** | **0** | **14** |

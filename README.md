@@ -20,12 +20,13 @@ AI-powered code review CLI for Laravel projects. Analyzes git diffs **or scans y
 
 | Category | Examples |
 |----------|---------|
-| **Security** | SQL injection, mass assignment (`$request->all()`), XSS in Blade, hardcoded secrets, missing auth middleware |
-| **Logic Errors** | Undefined variables, wrong variable in loop (`foreach $x` but uses `$y`), unreachable code after return |
-| **Semantic Errors** | Wrong comparison (`=` vs `===`), type mismatch, inverted logic (`&&` vs `||`) |
-| **Performance** | N+1 queries, missing eager loading, unbounded `Model::all()`, inefficient loops |
-| **Bad Practices** | Fat controllers, business logic in Blade views, missing Form Requests, missing error handling |
-| **Conventions** | Improper Eloquent usage, missing route model binding, naming violations, dead code |
+| **Security** | SQL injection, mass assignment, XSS, hardcoded secrets, missing auth, insecure file upload, CSRF missing, open redirect |
+| **Code Safety** | `dd()`/`dump()`/`ray()` left in code, `env()` outside config files, debug statements in production |
+| **Logic Errors** | Undefined variables, wrong variable in loop, unreachable code after return |
+| **Semantic Errors** | Wrong comparison (`=` vs `===`), type mismatch, inverted logic |
+| **Performance** | N+1 queries, missing eager loading, unbounded `Model::all()` |
+| **Bad Practices** | Fat controllers, business logic in views, missing Form Requests, missing error handling |
+| **Conventions** | Missing route model binding, naming violations, dead code, tight coupling |
 
 ## Requirements
 
