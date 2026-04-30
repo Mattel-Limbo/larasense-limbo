@@ -90,44 +90,39 @@ func WritePatch(issues []ai.Issue, outputPath string) error {
 }
 
 // ApplyFixes applies fixes to source files.
-// mode controls whether to prompt interactively or apply all.
-// reader is used for interactive input (pass os.Stdin for real usage, or a buffer for tests).
+// Fixes are collected per file, validated against the original content, then applied
+// in descending line order (bottom-up) in a single pass to avoid line-shift conflicts.
 func ApplyFixes(issues []ai.Issue, mode ApplyMode, reader io.Reader) (*ApplyResult, error) {
 	byFile := groupFixesByFile(issues)
 	result := &ApplyResult{}
-	scanner := bufio.NewScanner(reader)
+	inputScanner := bufio.NewScanner(reader)
 
 	for file, fixes := range byFile {
-		// Track which line ranges have been modified by previous fixes in this file.
-		// Used to detect overlapping fixes and provide clear skip messages.
-		var appliedRanges [][2]int // [startLine, endLine] of applied fixes (original coordinates)
+		content, err := os.ReadFile(file)
+		if err != nil {
+			for _, issue := range fixes {
+				result.Skipped = append(result.Skipped, SkippedFix{
+					File: file, Line: issue.Fix.StartLine, Title: issue.Title,
+					Reason: fmt.Sprintf("cannot read file: %v", err),
+				})
+			}
+			continue
+		}
+		lines := strings.Split(string(content), "\n")
+
+		// Phase 1: Validate and resolve all fixes against the ORIGINAL file content
+		type resolvedFix struct {
+			issue    ai.Issue
+			start    int
+			end      int
+			accepted bool
+		}
+		var resolved []resolvedFix
 
 		for _, issue := range fixes {
 			f := issue.Fix
 			severity := strings.ToUpper(issue.Severity)
 
-			// Check if this fix overlaps with a previously applied fix.
-			// If so, skip it — the code has already been changed in that region.
-			if overlapsApplied(f.StartLine, f.EndLine, appliedRanges) {
-				result.Skipped = append(result.Skipped, SkippedFix{
-					File: file, Line: f.StartLine, Title: issue.Title,
-					Reason: "overlaps with a previously applied fix in the same region",
-				})
-				continue
-			}
-
-			// Re-read file for each fix (file may have changed from previous fix)
-			content, err := os.ReadFile(file)
-			if err != nil {
-				result.Skipped = append(result.Skipped, SkippedFix{
-					File: file, Line: f.StartLine, Title: issue.Title,
-					Reason: fmt.Sprintf("cannot read file: %v", err),
-				})
-				continue
-			}
-			lines := strings.Split(string(content), "\n")
-
-			// Validate line range
 			if f.StartLine < 1 || f.StartLine > f.EndLine {
 				result.Skipped = append(result.Skipped, SkippedFix{
 					File: file, Line: f.StartLine, Title: issue.Title,
@@ -136,13 +131,11 @@ func ApplyFixes(issues []ai.Issue, mode ApplyMode, reader io.Reader) (*ApplyResu
 				continue
 			}
 
-			// Clamp EndLine to file length
 			endLine := f.EndLine
 			if endLine > len(lines) {
 				endLine = len(lines)
 			}
 
-			// Match: try multiple strategies to find the "before" code
 			actualBefore := strings.Join(lines[f.StartLine-1:endLine], "\n")
 			matched := matchBefore(actualBefore, f.Before)
 
@@ -169,54 +162,92 @@ func ApplyFixes(issues []ai.Issue, mode ApplyMode, reader io.Reader) (*ApplyResu
 			if !matched {
 				result.Skipped = append(result.Skipped, SkippedFix{
 					File: file, Line: f.StartLine, Title: issue.Title,
-					Reason: "code at target lines doesn't match AI's 'before' — file may have changed",
+					Reason: "code at target lines doesn't match AI's 'before' — file may have changed since analysis",
 				})
 				continue
 			}
 
-		if mode == ApplyDryRun {
-			printDryRunFix(file, f.StartLine, severity, issue.Title, f.Before, f.After)
-			result.Applied = append(result.Applied, AppliedFix{
-				File:  file,
-				Line:  f.StartLine,
-				Title: issue.Title,
-			})
+			if mode == ApplyDryRun {
+				printDryRunFix(file, f.StartLine, severity, issue.Title, f.Before, f.After)
+				result.Applied = append(result.Applied, AppliedFix{
+					File: file, Line: f.StartLine, Title: issue.Title,
+				})
+				continue
+			}
+
+			accepted := true
+			if mode == ApplyInteractive {
+				accepted = promptFix(inputScanner, file, f.StartLine, severity, issue.Title, f.Before, f.After)
+				if !accepted {
+					result.Skipped = append(result.Skipped, SkippedFix{
+						File: file, Line: f.StartLine, Title: issue.Title,
+						Reason: "skipped by user",
+					})
+				}
+			}
+
+			if accepted {
+				resolved = append(resolved, resolvedFix{
+					issue: issue, start: f.StartLine, end: endLine, accepted: true,
+				})
+			}
+		}
+
+		if mode == ApplyDryRun || len(resolved) == 0 {
 			continue
 		}
 
-		if mode == ApplyInteractive {
-			accepted := promptFix(scanner, file, f.StartLine, severity, issue.Title, f.Before, f.After)
-			if !accepted {
+		// Phase 2: Check for overlapping ranges among accepted fixes
+		var toApply []resolvedFix
+		sort.Slice(resolved, func(i, j int) bool {
+			return resolved[i].start < resolved[j].start
+		})
+		for i, rf := range resolved {
+			overlaps := false
+			for j := 0; j < i; j++ {
+				if toApply[j].accepted && rf.start <= toApply[j].end && rf.end >= toApply[j].start {
+					overlaps = true
+					break
+				}
+			}
+			if overlaps {
 				result.Skipped = append(result.Skipped, SkippedFix{
-					File: file, Line: f.StartLine, Title: issue.Title,
-					Reason: "skipped by user",
+					File: file, Line: rf.start, Title: rf.issue.Title,
+					Reason: "overlaps with another fix in the same file",
 				})
-				continue
+			} else {
+				toApply = append(toApply, rf)
 			}
 		}
 
-		appliedRanges = append(appliedRanges, [2]int{f.StartLine, endLine})
+		if len(toApply) == 0 {
+			continue
+		}
 
-		// Backup original file before first modification
+		// Phase 3: Apply all fixes bottom-up in a single pass (no line-shift conflicts)
 		if err := backupFile(file); err != nil {
 			log.Printf("[warning] could not backup %s: %v", file, err)
 		}
 
-		afterLines := strings.Split(f.After, "\n")
-		newLines := make([]string, 0, len(lines)-(endLine-f.StartLine+1)+len(afterLines))
-		newLines = append(newLines, lines[:f.StartLine-1]...)
-		newLines = append(newLines, afterLines...)
-		newLines = append(newLines, lines[endLine:]...)
+		sort.Slice(toApply, func(i, j int) bool {
+			return toApply[i].start > toApply[j].start
+		})
 
-		if err := os.WriteFile(file, []byte(strings.Join(newLines, "\n")), 0644); err != nil {
-			return result, fmt.Errorf("writing %s: %w", file, err)
+		for _, rf := range toApply {
+			afterLines := strings.Split(rf.issue.Fix.After, "\n")
+			newLines := make([]string, 0, len(lines)-(rf.end-rf.start+1)+len(afterLines))
+			newLines = append(newLines, lines[:rf.start-1]...)
+			newLines = append(newLines, afterLines...)
+			newLines = append(newLines, lines[rf.end:]...)
+			lines = newLines
+
+			result.Applied = append(result.Applied, AppliedFix{
+				File: file, Line: rf.start, Title: rf.issue.Title,
+			})
 		}
 
-		result.Applied = append(result.Applied, AppliedFix{
-			File:  file,
-			Line:  f.StartLine,
-			Title: issue.Title,
-		})
+		if err := os.WriteFile(file, []byte(strings.Join(lines, "\n")), 0644); err != nil {
+			return result, fmt.Errorf("writing %s: %w", file, err)
 		}
 	}
 
