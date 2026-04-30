@@ -22,7 +22,7 @@ type ProviderConfig struct {
 	APIKey      string  `mapstructure:"api_key"`
 	Model       string  `mapstructure:"model"`
 	Endpoint    string  `mapstructure:"endpoint"`    // "chat" or "responses" (default: "chat")
-	MaxTokens   int     `mapstructure:"max_tokens"`  // Max completion tokens (default: 1024, 0 = no limit)
+	MaxTokens   int     `mapstructure:"max_tokens"`  // Max completion tokens (default: 16384, 0 = no limit)
 	Temperature float64 `mapstructure:"temperature"` // Sampling temperature (default: 0.0 = fully deterministic)
 	Seed        int     `mapstructure:"seed"`        // Fixed seed for reproducible results (default: 42, 0 = random)
 }

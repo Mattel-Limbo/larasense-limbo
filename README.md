@@ -231,8 +231,8 @@ larasense-limbo analyze --base main --fix --apply --yes
 3. Without `--fix`, the pipeline is unchanged — zero extra token consumption
 4. `--apply` shows each fix with colored before/after diff and prompts `y/n/q` (quit)
 5. `--apply --yes` skips prompts and applies all fixes (for CI or batch operations)
-6. Before-matching uses 4 strategies (exact → trimmed → normalized → contains) + nearby search ±3 lines
-7. Skipped fixes are logged with reason (mismatch, user rejected, invalid range)
+6. Before-matching uses 6 strategies (exact → trimmed → normalized whitespace → stripped indentation → contains → full-file search) + nearby search ±15 lines
+7. Skipped fixes are logged with reason (mismatch, user rejected, invalid range, overlapping)
 
 #### Output with `--fix`
 
@@ -250,8 +250,13 @@ larasense-limbo analyze --base main --fix --apply --yes
 
 #### Safety
 
-- **Before-validation**: Before applying any fix, the tool compares the `before` code against the actual file content. If they don't match (file was edited since analysis), the fix is skipped.
-- **`--apply` requires `--fix`**: You can't accidentally apply without generating fixes first.
+- **Interactive by default**: `--apply` prompts y/n per fix with colored diff preview. Press `q` to abort remaining fixes.
+- **6-strategy fuzzy matching**: Handles AI line number offsets (±15 lines), whitespace differences, indentation mismatches, and full-file content search.
+- **Before-validation**: Before applying any fix, the tool compares the `before` code against the actual file content. If no match is found, the fix is skipped with a clear reason.
+- **Overlapping detection**: If two fixes target the same lines, the second is skipped to prevent file corruption.
+- **Re-read per fix**: File is re-read after each applied fix to ensure subsequent fixes work on fresh content.
+- **Truncated response repair**: If AI response is cut off (`finish_reason: "length"`), the tool attempts to repair the JSON and extract complete issues.
+- **`--yes` requires `--apply`**: You can't skip prompting without explicitly opting in.
 - **Patch review**: Use `--patch` to generate a diff file you can review before applying with `git apply`.
 
 ### Output Examples

@@ -82,7 +82,7 @@ Progress tracking untuk perbaikan dan peningkatan fitur `--fix --apply` pada lar
 | 2 | Dry-run mode (`--fix --dry-run`) | 📋 Planned | Show what would be applied tanpa mengubah file |
 | 3 | Undo/rollback support | 📋 Planned | Backup file sebelum apply, `--undo` untuk revert |
 | 4 | Fix confidence score | 📋 Planned | AI rate confidence per fix, skip low-confidence |
-| 5 | Batch fix summary | 📋 Planned | Summary tabel di akhir: applied/skipped/overlapping counts |
+| 5 | Batch fix summary | ✅ Done | Summary tabel di akhir: total fixable, applied, skipped + breakdown by skip reason |
 | 6 | Git-aware apply | 📋 Planned | Auto-create branch sebelum apply, easy revert via `git checkout` |
 
 ## Future Ideas

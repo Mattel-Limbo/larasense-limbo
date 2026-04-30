@@ -22,7 +22,6 @@ func handleFixOutput(result *reviewer.Result, fix, apply, yes bool, patchPath st
 
 	log.Printf("Found %d issue(s) with auto-fix suggestions", fixable)
 
-	// Write patch file if requested
 	if patchPath != "" {
 		if err := fixer.WritePatch(result.Issues, patchPath); err != nil {
 			return fmt.Errorf("writing patch file: %w", err)
@@ -31,7 +30,6 @@ func handleFixOutput(result *reviewer.Result, fix, apply, yes bool, patchPath st
 		fmt.Printf("     Apply with: git apply %s\n\n", patchPath)
 	}
 
-	// Apply fixes
 	if apply {
 		mode := fixer.ApplyInteractive
 		if yes {
@@ -43,7 +41,6 @@ func handleFixOutput(result *reviewer.Result, fix, apply, yes bool, patchPath st
 			return fmt.Errorf("applying fixes: %w", err)
 		}
 
-		// Show applied
 		if len(applyResult.Applied) > 0 {
 			fmt.Printf("\n  🔧 Applied %d fix(es):\n", len(applyResult.Applied))
 			for _, a := range applyResult.Applied {
@@ -51,7 +48,6 @@ func handleFixOutput(result *reviewer.Result, fix, apply, yes bool, patchPath st
 			}
 		}
 
-		// Show skipped
 		if len(applyResult.Skipped) > 0 {
 			fmt.Printf("\n  ⏭️  Skipped %d fix(es):\n", len(applyResult.Skipped))
 			for _, s := range applyResult.Skipped {
@@ -59,13 +55,42 @@ func handleFixOutput(result *reviewer.Result, fix, apply, yes bool, patchPath st
 			}
 		}
 
-		if len(applyResult.Applied) == 0 && len(applyResult.Skipped) > 0 {
-			fmt.Println("\n  💡 Tip: fixes were skipped because the code didn't match AI's suggestion.")
-			fmt.Println("     Try running with --no-cache to get fresh fix data.")
-		}
-
-		fmt.Println()
+		printFixSummary(applyResult, fixable)
 	}
 
 	return nil
+}
+
+func printFixSummary(result *fixer.ApplyResult, totalFixable int) {
+	applied := len(result.Applied)
+	skipped := len(result.Skipped)
+
+	skippedByReason := make(map[string]int)
+	for _, s := range result.Skipped {
+		skippedByReason[s.Reason]++
+	}
+
+	fmt.Println()
+	fmt.Println("  ══════════════════════════════════════════════════════")
+	fmt.Println("  Fix Summary")
+	fmt.Println("  ──────────────────────────────────────────────────────")
+	fmt.Printf("    Total fixable:  %d\n", totalFixable)
+	fmt.Printf("    ✅ Applied:     %d\n", applied)
+	fmt.Printf("    ⏭️  Skipped:     %d\n", skipped)
+
+	if len(skippedByReason) > 0 {
+		fmt.Println("    ─────────────────────────────")
+		for reason, count := range skippedByReason {
+			fmt.Printf("      • %s: %d\n", reason, count)
+		}
+	}
+
+	fmt.Println("  ══════════════════════════════════════════════════════")
+
+	if applied == 0 && skipped > 0 {
+		fmt.Println("\n  💡 Tip: fixes were skipped because the code didn't match AI's suggestion.")
+		fmt.Println("     Try running with --no-cache to get fresh fix data.")
+	}
+
+	fmt.Println()
 }
