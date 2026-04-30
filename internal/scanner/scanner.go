@@ -78,6 +78,50 @@ func (s *Scanner) Scan() ([]context.FileContext, error) {
 	return files, nil
 }
 
+func (s *Scanner) ScanFiles(filePaths []string) ([]context.FileContext, error) {
+	absProjectDir, err := resolveAbsPath(s.projectDir)
+	if err != nil {
+		return nil, fmt.Errorf("resolving project path: %w", err)
+	}
+
+	var files []context.FileContext
+
+	for _, filePath := range filePaths {
+		absPath, err := resolveAbsPath(filePath)
+		if err != nil {
+			return nil, fmt.Errorf("resolving file path %s: %w", filePath, err)
+		}
+
+		info, err := os.Stat(absPath)
+		if err != nil {
+			return nil, fmt.Errorf("file not found: %s", filePath)
+		}
+		if info.IsDir() {
+			return nil, fmt.Errorf("%s is a directory, use --path instead", filePath)
+		}
+
+		relPath, err := filepath.Rel(absProjectDir, absPath)
+		if err != nil {
+			relPath = filepath.ToSlash(filePath)
+		}
+		relPath = filepath.ToSlash(relPath)
+
+		content, err := os.ReadFile(absPath)
+		if err != nil {
+			return nil, fmt.Errorf("reading %s: %w", filePath, err)
+		}
+
+		files = append(files, context.FileContext{
+			Path:     relPath,
+			Type:     context.ClassifyFile(relPath),
+			Hint:     context.GenerateHint(relPath),
+			DiffText: string(content),
+		})
+	}
+
+	return files, nil
+}
+
 func (s *Scanner) skipDir(name string) error {
 	skipDirs := []string{".git", "vendor", "node_modules", ".idea", ".vscode", "storage"}
 	for _, skip := range skipDirs {

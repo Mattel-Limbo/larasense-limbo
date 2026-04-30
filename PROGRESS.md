@@ -111,24 +111,34 @@ Status tracking untuk fitur-fitur larasense-limbo.
 | 69 | EndLine clamping | ✅ Done | AI sometimes overshoots file length, clamped to actual line count |
 | 70 | `max_tokens` default 16384 | ✅ Done | Prevents truncation for most responses, user-configurable |
 
+## Planned Ideas
+
+| # | Fitur | Status | Catatan |
+|---|-------|--------|---------|
+| 71 | Scan spesifik file (`--file`) | ✅ Done | `scan --file path/to/file.php`, repeatable, skips filters, hemat token |
+| 72 | Scan modified files (`--modified`) | 📋 Planned | Scan file dari `git status` (modified+staged), pre-commit workflow |
+| 73 | Logic/Semantic error detection | 📋 Planned | Tambah kategori: undefined variable, wrong type, unreachable code, wrong condition |
+| 74 | Flag aliases/simplification | 📋 Planned | `--auto` alias `--apply --yes`, `--preview` alias `--dry-run`, `--fresh` alias `--no-cache` |
+| 75 | Terminal UI improvement | 📋 Planned | Progress counter `[12/47]`, better copywriting, batch ETA |
+
 ## Future Ideas
 
 | # | Fitur | Status | Catatan |
 |---|-------|--------|---------|
-| 71 | Fix confidence score | 💡 Future | AI rate confidence per fix, skip low-confidence (low priority — existing safety layers sufficient) |
-| 72 | Multi-pass fix | 💡 Future | Re-run AI setelah fix applied untuk generate fix yang akurat terhadap state baru |
-| 73 | Fix dependency graph | 💡 Future | Detect fix A depends on fix B, apply in correct order |
-| 74 | Semantic diff display | 💡 Future | Syntax-highlighted diff di terminal |
-| 75 | Fix templates | 💡 Future | Pre-defined fix patterns tanpa AI (e.g., `Model::all()` → `Model::cursor()`) |
-| 76 | Multi-language support | 💡 Future | Vue/JS files di Laravel project |
-| 77 | Rule customization | 💡 Future | Enable/disable specific rule categories |
-| 78 | Baseline support | 💡 Future | Ignore existing issues, hanya report baru |
-| 79 | SARIF output | 💡 Future | Standard format untuk security tools |
-| 80 | VS Code extension | 💡 Future | Real-time review di editor |
-| 81 | Pre-commit hook | 💡 Future | Review otomatis sebelum commit |
-| 82 | Team config sharing | 💡 Future | Shared config via package registry |
-| 83 | Review history/analytics | 💡 Future | Track issue trends over time |
-| 84 | Plugin system | 💡 Future | Custom analyzers via Go plugins |
+| 76 | Fix confidence score | 💡 Future | AI rate confidence per fix, skip low-confidence |
+| 77 | Multi-pass fix | 💡 Future | Re-run AI setelah fix applied untuk generate fix yang akurat terhadap state baru |
+| 78 | Fix dependency graph | 💡 Future | Detect fix A depends on fix B, apply in correct order |
+| 79 | Semantic diff display | 💡 Future | Syntax-highlighted diff di terminal |
+| 80 | Fix templates | 💡 Future | Pre-defined fix patterns tanpa AI (e.g., `Model::all()` → `Model::cursor()`) |
+| 81 | Multi-language support | 💡 Future | Vue/JS files di Laravel project |
+| 82 | Rule customization | 💡 Future | Enable/disable specific rule categories |
+| 83 | Baseline support | 💡 Future | Ignore existing issues, hanya report baru |
+| 84 | SARIF output | 💡 Future | Standard format untuk security tools |
+| 85 | VS Code extension | 💡 Future | Real-time review di editor |
+| 86 | Pre-commit hook | 💡 Future | Review otomatis sebelum commit |
+| 87 | Team config sharing | 💡 Future | Shared config via package registry |
+| 88 | Review history/analytics | 💡 Future | Track issue trends over time |
+| 89 | Plugin system | 💡 Future | Custom analyzers via Go plugins |
 
 ---
 
@@ -143,5 +153,6 @@ Status tracking untuk fitur-fitur larasense-limbo.
 | Planned Features | 8 | 0 | 0 |
 | New Features | 16 | 0 | 0 |
 | AI Fixer Enhancements | 14 | 0 | 0 |
+| Planned Ideas | 1 | 4 | 0 |
 | Future Ideas | 0 | 0 | 14 |
-| **Total** | **70** | **0** | **14** |
+| **Total** | **71** | **4** | **14** |

@@ -8,17 +8,19 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/Mattel-Limbo/larasense-limbo/internal/config"
+	"github.com/Mattel-Limbo/larasense-limbo/internal/context"
 	"github.com/Mattel-Limbo/larasense-limbo/internal/output"
 	"github.com/Mattel-Limbo/larasense-limbo/internal/reviewer"
 	"github.com/Mattel-Limbo/larasense-limbo/internal/scanner"
 )
 
 var (
-	flagScanPath    string
-	flagScanJSON    bool
-	flagScanFormat  string
-	flagScanVerbose bool
-	flagScanNoCache bool
+	flagScanPath      string
+	flagScanFiles     []string
+	flagScanJSON      bool
+	flagScanFormat    string
+	flagScanVerbose   bool
+	flagScanNoCache   bool
 	flagScanFix       bool
 	flagScanApply     bool
 	flagScanYes       bool
@@ -40,6 +42,7 @@ Files are filtered using the same include/exclude patterns from config.`,
 
 func init() {
 	scanCmd.Flags().StringVar(&flagScanPath, "path", ".", "Root directory to scan")
+	scanCmd.Flags().StringSliceVar(&flagScanFiles, "file", nil, "Scan specific file(s) instead of directory (repeatable)")
 	scanCmd.Flags().BoolVar(&flagScanJSON, "json", false, "Output results as JSON (shorthand for --format json)")
 	scanCmd.Flags().StringVar(&flagScanFormat, "format", "human", "Output format: human, json, github")
 	scanCmd.Flags().BoolVar(&flagScanVerbose, "verbose", false, "Show detailed request/response logs for debugging")
@@ -80,12 +83,22 @@ func runScan(cmd *cobra.Command, args []string) error {
 	}
 
 	log.Printf("Using AI provider: %s (model: %s)", cfg.Provider.BaseURL, cfg.Provider.Model)
-	log.Printf("Scanning directory: %s", flagScanPath)
 
 	s := scanner.New(cfg, flagScanPath)
-	files, err := s.Scan()
-	if err != nil {
-		return fmt.Errorf("scanning files: %w", err)
+	var files []context.FileContext
+
+	if len(flagScanFiles) > 0 {
+		log.Printf("Scanning %d specific file(s)", len(flagScanFiles))
+		files, err = s.ScanFiles(flagScanFiles)
+		if err != nil {
+			return fmt.Errorf("scanning files: %w", err)
+		}
+	} else {
+		log.Printf("Scanning directory: %s", flagScanPath)
+		files, err = s.Scan()
+		if err != nil {
+			return fmt.Errorf("scanning files: %w", err)
+		}
 	}
 
 	if len(files) == 0 {

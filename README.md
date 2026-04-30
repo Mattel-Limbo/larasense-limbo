@@ -164,6 +164,13 @@ larasense-limbo scan
 # Scan a specific Laravel project
 larasense-limbo scan --path /path/to/laravel-project
 
+# Scan specific file(s) — saves tokens, targeted review
+larasense-limbo scan --file app/Http/Controllers/UserController.php
+larasense-limbo scan --file app/Models/User.php --file routes/web.php
+
+# Combine with fix
+larasense-limbo scan --file app/Traits/Auditable.php --fix --apply
+
 # Output as JSON
 larasense-limbo scan --json
 
@@ -179,6 +186,7 @@ larasense-limbo scan --no-cache
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
 | `--path` | string | `.` | Root directory to scan |
+| `--file` | strings | | Scan specific file(s) instead of directory (repeatable, skips include/exclude filters) |
 | `--json` | bool | `false` | Output results as JSON |
 | `--format` | string | `human` | Output format: `human`, `json`, `github` |
 | `--verbose` | bool | `false` | Show detailed AI request/response logs |
