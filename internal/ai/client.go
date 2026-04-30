@@ -894,6 +894,8 @@ HIGH (report if found):
 - Hardcoded secrets: API keys, passwords, tokens as string literals
 - Missing auth: public routes/controllers handling sensitive data without middleware
 - Null reference: calling methods on potentially null values (e.g. request()->route()->getName() without null check)
+- Undefined variable: using a variable that was never defined or assigned in current scope
+- Wrong variable in loop: loop iterates as $x but body references $y (different variable name)
 
 MEDIUM (report if found):
 - N+1 query: DB query inside foreach/loop without eager loading
@@ -902,11 +904,15 @@ MEDIUM (report if found):
 - Missing validation: store/update without Form Request or validate()
 - Double write: create() followed by immediate save() on same model
 - Missing error handling: external calls (HTTP, file, queue) without try/catch
+- Unreachable code: code after return/throw/exit that will never execute
+- Wrong comparison: using = instead of == or === in conditions, or inverted logic (e.g. && vs ||)
+- Type mismatch: passing wrong type to method (string where int expected, array where object expected)
 
 LOW (report if found):
 - Tight coupling: direct new ClassName() instead of dependency injection
 - Missing route model binding: manual Model::find($id) in controller
 - Naming violation: non-standard Laravel naming (controller not suffixed, model plural)
+- Dead code: unused variables, unused imports, unreferenced private methods
 
 RULES:
 - Only report patterns found in CHANGED lines (+ lines in diff)
@@ -934,6 +940,8 @@ HIGH (report if found):
 - Hardcoded secrets: API keys, passwords, tokens as string literals
 - Missing auth: public routes/controllers handling sensitive data without middleware
 - Null reference: calling methods on potentially null values without null check
+- Undefined variable: using a variable that was never defined or assigned in current scope
+- Wrong variable in loop: loop iterates as $x but body references $y (different variable name)
 
 MEDIUM (report if found):
 - N+1 query: DB query inside foreach/loop without eager loading
@@ -942,11 +950,15 @@ MEDIUM (report if found):
 - Missing validation: store/update without Form Request or validate()
 - Double write: create() followed by immediate save() on same model
 - Missing error handling: external calls (HTTP, file, queue) without try/catch
+- Unreachable code: code after return/throw/exit that will never execute
+- Wrong comparison: using = instead of == or === in conditions, or inverted logic (e.g. && vs ||)
+- Type mismatch: passing wrong type to method (string where int expected, array where object expected)
 
 LOW (report if found):
 - Tight coupling: direct new ClassName() instead of dependency injection
 - Missing route model binding: manual Model::find($id) in controller
 - Naming violation: non-standard Laravel naming (controller not suffixed, model plural)
+- Dead code: unused variables, unused imports, unreferenced private methods
 
 RULES:
 - Scan entire file content

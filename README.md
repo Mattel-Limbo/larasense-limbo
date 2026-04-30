@@ -20,10 +20,12 @@ AI-powered code review CLI for Laravel projects. Analyzes git diffs **or scans y
 
 | Category | Examples |
 |----------|---------|
-| **Performance** | N+1 queries, missing eager loading, unnecessary DB queries, inefficient loops |
-| **Security** | Missing validation, mass assignment (`$request->all()`), SQL injection, XSS in Blade, CSRF |
-| **Bad Practices** | Fat controllers, business logic in Blade views, missing Form Requests, hardcoded values |
-| **Conventions** | Improper Eloquent usage, missing route model binding, naming violations, missing middleware |
+| **Security** | SQL injection, mass assignment (`$request->all()`), XSS in Blade, hardcoded secrets, missing auth middleware |
+| **Logic Errors** | Undefined variables, wrong variable in loop (`foreach $x` but uses `$y`), unreachable code after return |
+| **Semantic Errors** | Wrong comparison (`=` vs `===`), type mismatch, inverted logic (`&&` vs `||`) |
+| **Performance** | N+1 queries, missing eager loading, unbounded `Model::all()`, inefficient loops |
+| **Bad Practices** | Fat controllers, business logic in Blade views, missing Form Requests, missing error handling |
+| **Conventions** | Improper Eloquent usage, missing route model binding, naming violations, dead code |
 
 ## Requirements
 

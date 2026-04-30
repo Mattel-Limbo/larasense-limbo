@@ -143,8 +143,7 @@ func TestBuildDiffPrompt(t *testing.T) {
 	if prompt == "" {
 		t.Error("expected non-empty prompt")
 	}
-	// Should contain deterministic checklist patterns with fixed severity
-	keywords := []string{"deterministic", "N+1", "Mass assignment", "SEVERITY IS FIXED", "HIGH", "MEDIUM", "LOW", "JSON"}
+	keywords := []string{"deterministic", "N+1", "Mass assignment", "SEVERITY IS FIXED", "HIGH", "MEDIUM", "LOW", "JSON", "Undefined variable", "Unreachable code", "Dead code"}
 	for _, kw := range keywords {
 		if !containsStr(prompt, kw) {
 			t.Errorf("diff prompt should contain %q", kw)
@@ -157,7 +156,7 @@ func TestBuildScanPrompt(t *testing.T) {
 	if prompt == "" {
 		t.Error("expected non-empty prompt")
 	}
-	keywords := []string{"deterministic", "entire file", "SEVERITY IS FIXED", "HIGH", "MEDIUM", "LOW", "JSON"}
+	keywords := []string{"deterministic", "entire file", "SEVERITY IS FIXED", "HIGH", "MEDIUM", "LOW", "JSON", "Undefined variable", "Unreachable code", "Dead code"}
 	for _, kw := range keywords {
 		if !containsStr(prompt, kw) {
 			t.Errorf("scan prompt should contain %q", kw)
