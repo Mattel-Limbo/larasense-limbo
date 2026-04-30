@@ -79,7 +79,7 @@ Progress tracking untuk perbaikan dan peningkatan fitur `--fix --apply` pada lar
 | # | Fitur | Status | Catatan |
 |---|-------|--------|---------|
 | 1 | Retry with higher `max_tokens` on truncation | 📋 Planned | Auto-retry saat `finish_reason: "length"` dengan 2x token budget |
-| 2 | Dry-run mode (`--fix --dry-run`) | 📋 Planned | Show what would be applied tanpa mengubah file |
+| 2 | Dry-run mode (`--fix --dry-run`) | ✅ Done | Show what would be applied tanpa mengubah file, colored diff preview, summary at end |
 | 3 | Undo/rollback support | 📋 Planned | Backup file sebelum apply, `--undo` untuk revert |
 | 4 | Fix confidence score | 📋 Planned | AI rate confidence per fix, skip low-confidence |
 | 5 | Batch fix summary | ✅ Done | Summary tabel di akhir: total fixable, applied, skipped + breakdown by skip reason |

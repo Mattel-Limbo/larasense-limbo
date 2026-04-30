@@ -22,6 +22,8 @@ const (
 	ApplyInteractive
 	// ApplyAll applies all fixes without prompting.
 	ApplyAll
+	// ApplyDryRun shows what would be applied without writing to files.
+	ApplyDryRun
 )
 
 // AppliedFix records a successfully applied fix.
@@ -171,37 +173,44 @@ func ApplyFixes(issues []ai.Issue, mode ApplyMode, reader io.Reader) (*ApplyResu
 				continue
 			}
 
-			// Interactive mode: prompt user
-			if mode == ApplyInteractive {
-				accepted := promptFix(scanner, file, f.StartLine, severity, issue.Title, f.Before, f.After)
-				if !accepted {
-					result.Skipped = append(result.Skipped, SkippedFix{
-						File: file, Line: f.StartLine, Title: issue.Title,
-						Reason: "skipped by user",
-					})
-					continue
-				}
-			}
-
-			// Record the original range before applying
-			appliedRanges = append(appliedRanges, [2]int{f.StartLine, endLine})
-
-			// Apply the fix and write immediately
-			afterLines := strings.Split(f.After, "\n")
-			newLines := make([]string, 0, len(lines)-(endLine-f.StartLine+1)+len(afterLines))
-			newLines = append(newLines, lines[:f.StartLine-1]...)
-			newLines = append(newLines, afterLines...)
-			newLines = append(newLines, lines[endLine:]...)
-
-			if err := os.WriteFile(file, []byte(strings.Join(newLines, "\n")), 0644); err != nil {
-				return result, fmt.Errorf("writing %s: %w", file, err)
-			}
-
+		if mode == ApplyDryRun {
+			printDryRunFix(file, f.StartLine, severity, issue.Title, f.Before, f.After)
 			result.Applied = append(result.Applied, AppliedFix{
 				File:  file,
 				Line:  f.StartLine,
 				Title: issue.Title,
 			})
+			continue
+		}
+
+		if mode == ApplyInteractive {
+			accepted := promptFix(scanner, file, f.StartLine, severity, issue.Title, f.Before, f.After)
+			if !accepted {
+				result.Skipped = append(result.Skipped, SkippedFix{
+					File: file, Line: f.StartLine, Title: issue.Title,
+					Reason: "skipped by user",
+				})
+				continue
+			}
+		}
+
+		appliedRanges = append(appliedRanges, [2]int{f.StartLine, endLine})
+
+		afterLines := strings.Split(f.After, "\n")
+		newLines := make([]string, 0, len(lines)-(endLine-f.StartLine+1)+len(afterLines))
+		newLines = append(newLines, lines[:f.StartLine-1]...)
+		newLines = append(newLines, afterLines...)
+		newLines = append(newLines, lines[endLine:]...)
+
+		if err := os.WriteFile(file, []byte(strings.Join(newLines, "\n")), 0644); err != nil {
+			return result, fmt.Errorf("writing %s: %w", file, err)
+		}
+
+		result.Applied = append(result.Applied, AppliedFix{
+			File:  file,
+			Line:  f.StartLine,
+			Title: issue.Title,
+		})
 		}
 	}
 
@@ -249,6 +258,22 @@ func promptFix(scanner *bufio.Scanner, file string, line int, severity, title, b
 	default:
 		return false
 	}
+}
+
+func printDryRunFix(file string, line int, severity, title, before, after string) {
+	icon := severityIcon(severity)
+	fmt.Println()
+	fmt.Printf("  [DRY-RUN] %s [%s] %s\n", icon, severity, title)
+	fmt.Printf("  📄 %s (line %d)\n", file, line)
+	fmt.Printf("  \033[31m┌─ Would remove:\033[0m\n")
+	for _, l := range strings.Split(before, "\n") {
+		fmt.Printf("  \033[31m│ - %s\033[0m\n", l)
+	}
+	fmt.Printf("  \033[32m├─ Would add:\033[0m\n")
+	for _, l := range strings.Split(after, "\n") {
+		fmt.Printf("  \033[32m│ + %s\033[0m\n", l)
+	}
+	fmt.Printf("  └─\n")
 }
 
 // matchBefore checks if the actual file content matches the AI's "before" string.

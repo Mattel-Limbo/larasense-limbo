@@ -9,7 +9,7 @@ import (
 	"github.com/Mattel-Limbo/larasense-limbo/internal/reviewer"
 )
 
-func handleFixOutput(result *reviewer.Result, fix, apply, yes bool, patchPath string) error {
+func handleFixOutput(result *reviewer.Result, fix, apply, yes, dryRun bool, patchPath string) error {
 	if !fix {
 		return nil
 	}
@@ -28,6 +28,16 @@ func handleFixOutput(result *reviewer.Result, fix, apply, yes bool, patchPath st
 		}
 		fmt.Printf("\n  📝 Patch written to %s (%d fix(es))\n", patchPath, fixable)
 		fmt.Printf("     Apply with: git apply %s\n\n", patchPath)
+	}
+
+	if dryRun {
+		fmt.Print("\n  🔍 Dry-run mode — no files will be modified\n\n")
+		applyResult, err := fixer.ApplyFixes(result.Issues, fixer.ApplyDryRun, os.Stdin)
+		if err != nil {
+			return fmt.Errorf("dry-run: %w", err)
+		}
+		printFixSummary(applyResult, fixable)
+		return nil
 	}
 
 	if apply {
