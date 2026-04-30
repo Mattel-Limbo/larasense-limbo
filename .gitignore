@@ -18,5 +18,8 @@ vendor/
 # Cache
 .larasense-limbo-cache.json
 
+# Fix backup (created by --fix --apply, removed by undo)
+.larasense-limbo-backup/
+
 # Config (contains secrets — use .larasense-limbo.yml.example as template)
 .larasense-limbo.yml

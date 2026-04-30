@@ -15,8 +15,8 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.Provider.Endpoint != "chat" {
 		t.Errorf("expected default endpoint 'chat', got '%s'", cfg.Provider.Endpoint)
 	}
-	if cfg.Provider.MaxTokens != 1024 {
-		t.Errorf("expected default max_tokens 1024, got %d", cfg.Provider.MaxTokens)
+	if cfg.Provider.MaxTokens != 16384 {
+		t.Errorf("expected default max_tokens 16384, got %d", cfg.Provider.MaxTokens)
 	}
 	if cfg.Provider.Temperature != 0.0 {
 		t.Errorf("expected default temperature 0.0, got %f", cfg.Provider.Temperature)

@@ -57,7 +57,38 @@ func GetSurroundingLines(ref, filePath string, targetLine, contextLines int) (st
 	return result.String(), nil
 }
 
-// runGit executes a git command and returns its stdout.
+func GetCurrentBranch() (string, error) {
+	out, err := runGit("rev-parse", "--abbrev-ref", "HEAD")
+	if err != nil {
+		return "", fmt.Errorf("getting current branch: %w", err)
+	}
+	return strings.TrimSpace(out), nil
+}
+
+func IsCleanWorkingTree() bool {
+	out, err := runGit("status", "--porcelain")
+	if err != nil {
+		return false
+	}
+	return strings.TrimSpace(out) == ""
+}
+
+func CreateAndCheckoutBranch(name string) error {
+	_, err := runGit("checkout", "-b", name)
+	if err != nil {
+		return fmt.Errorf("creating branch %s: %w", name, err)
+	}
+	return nil
+}
+
+func CheckoutBranch(name string) error {
+	_, err := runGit("checkout", name)
+	if err != nil {
+		return fmt.Errorf("checking out branch %s: %w", name, err)
+	}
+	return nil
+}
+
 func runGit(args ...string) (string, error) {
 	cmd := exec.Command("git", args...)
 	var stdout, stderr bytes.Buffer
