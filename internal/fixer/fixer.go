@@ -202,10 +202,10 @@ func ApplyFixes(issues []ai.Issue, mode ApplyMode, reader io.Reader) (*ApplyResu
 		sort.Slice(resolved, func(i, j int) bool {
 			return resolved[i].start < resolved[j].start
 		})
-		for i, rf := range resolved {
+		for _, rf := range resolved {
 			overlaps := false
-			for j := 0; j < i; j++ {
-				if toApply[j].accepted && rf.start <= toApply[j].end && rf.end >= toApply[j].start {
+			for _, applied := range toApply {
+				if rf.start <= applied.end && rf.end >= applied.start {
 					overlaps = true
 					break
 				}
