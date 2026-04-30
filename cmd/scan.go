@@ -2,8 +2,9 @@ package cmd
 
 import (
 	"fmt"
-	"log"
 	"os"
+	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -13,6 +14,7 @@ import (
 	"github.com/Mattel-Limbo/larasense-limbo/internal/output"
 	"github.com/Mattel-Limbo/larasense-limbo/internal/reviewer"
 	"github.com/Mattel-Limbo/larasense-limbo/internal/scanner"
+	"github.com/Mattel-Limbo/larasense-limbo/internal/ui"
 )
 
 var (
@@ -125,10 +127,9 @@ func runScan(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("loading config: %w", err)
 	}
 
-	log.Printf("Using AI provider: %s (model: %s)", cfg.Provider.BaseURL, cfg.Provider.Model)
-
 	s := scanner.New(cfg, flagScanPath)
 	var files []context.FileContext
+	var target string
 
 	if flagScanModified {
 		modifiedPaths, gitErr := git.GetModifiedFiles()
@@ -139,19 +140,19 @@ func runScan(cmd *cobra.Command, args []string) error {
 			fmt.Println("No modified files found in git working tree.")
 			return nil
 		}
-		log.Printf("Found %d modified file(s) from git status", len(modifiedPaths))
+		target = fmt.Sprintf("%d modified files from git status", len(modifiedPaths))
 		files, err = s.ScanFiles(modifiedPaths)
 		if err != nil {
 			return fmt.Errorf("scanning modified files: %w", err)
 		}
 	} else if len(flagScanFiles) > 0 {
-		log.Printf("Scanning %d specific file(s)", len(flagScanFiles))
+		target = fmt.Sprintf("%d specific file(s)", len(flagScanFiles))
 		files, err = s.ScanFiles(flagScanFiles)
 		if err != nil {
 			return fmt.Errorf("scanning files: %w", err)
 		}
 	} else {
-		log.Printf("Scanning directory: %s", flagScanPath)
+		target = fmt.Sprintf("directory: %s", flagScanPath)
 		files, err = s.Scan()
 		if err != nil {
 			return fmt.Errorf("scanning files: %w", err)
@@ -163,7 +164,15 @@ func runScan(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	log.Printf("Found %d Laravel files to scan", len(files))
+	mode := scanModeLabel()
+	ui.PrintHeader("🔍 Larasense Limbo — Scan", map[string]string{
+		"Provider": fmt.Sprintf("%s (%s)", cfg.Provider.Model, cfg.Provider.BaseURL),
+		"Target":   target,
+		"Files":    fmt.Sprintf("%d Laravel files", len(files)),
+		"Mode":     mode,
+	}, []string{"Provider", "Target", "Files", "Mode"})
+
+	startTime := time.Now()
 
 	rev := reviewer.New(cfg, flagScanVerbose, flagScanNoCache, flagScanFix)
 	result, err := rev.RunScan(files)
@@ -189,7 +198,8 @@ func runScan(cmd *cobra.Command, args []string) error {
 		fmt.Fprint(os.Stdout, output.FormatHuman(result))
 	}
 
-	if err := handleFixOutput(result, flagScanFix, flagScanApply, flagScanYes, flagScanDryRun, flagScanGitBranch, flagScanPatch); err != nil {
+	elapsed := time.Since(startTime)
+	if err := handleFixOutput(result, flagScanFix, flagScanApply, flagScanYes, flagScanDryRun, flagScanGitBranch, flagScanPatch, elapsed); err != nil {
 		return err
 	}
 
@@ -200,4 +210,31 @@ func runScan(cmd *cobra.Command, args []string) error {
 	}
 
 	return nil
+}
+
+func scanModeLabel() string {
+	var parts []string
+	if flagScanAuto {
+		parts = append(parts, "--auto")
+	} else {
+		if flagScanFix {
+			parts = append(parts, "--fix")
+		}
+		if flagScanApply {
+			parts = append(parts, "--apply")
+		}
+		if flagScanPreview {
+			parts = append(parts, "--preview")
+		}
+	}
+	if flagScanFresh || flagScanNoCache {
+		parts = append(parts, "--fresh")
+	}
+	if flagScanModified {
+		parts = append(parts, "--modified")
+	}
+	if len(parts) == 0 {
+		return "scan (review only)"
+	}
+	return "scan " + fmt.Sprintf("%s", strings.Join(parts, " "))
 }

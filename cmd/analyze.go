@@ -6,6 +6,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -13,6 +14,7 @@ import (
 	gh "github.com/Mattel-Limbo/larasense-limbo/internal/github"
 	"github.com/Mattel-Limbo/larasense-limbo/internal/output"
 	"github.com/Mattel-Limbo/larasense-limbo/internal/reviewer"
+	"github.com/Mattel-Limbo/larasense-limbo/internal/ui"
 )
 
 var (
@@ -104,8 +106,12 @@ func runAnalyze(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("loading config: %w", err)
 	}
 
-	log.Printf("Using AI provider: %s (model: %s)", cfg.Provider.BaseURL, cfg.Provider.Model)
-	log.Printf("Comparing %s...%s", flagBase, flagHead)
+	ui.PrintHeader("🔍 Larasense Limbo — Analyze", map[string]string{
+		"Provider": fmt.Sprintf("%s (%s)", cfg.Provider.Model, cfg.Provider.BaseURL),
+		"Diff":     fmt.Sprintf("%s...%s", flagBase, flagHead),
+	}, []string{"Provider", "Diff"})
+
+	startTime := time.Now()
 
 	rev := reviewer.New(cfg, flagVerbose, flagNoCache, flagFix)
 	result, err := rev.Run(flagBase, flagHead)
@@ -131,7 +137,8 @@ func runAnalyze(cmd *cobra.Command, args []string) error {
 		fmt.Fprint(os.Stdout, output.FormatHuman(result))
 	}
 
-	if err := handleFixOutput(result, flagFix, flagApply, flagYes, flagDryRun, flagGitBranch, flagPatch); err != nil {
+	elapsed := time.Since(startTime)
+	if err := handleFixOutput(result, flagFix, flagApply, flagYes, flagDryRun, flagGitBranch, flagPatch, elapsed); err != nil {
 		return err
 	}
 

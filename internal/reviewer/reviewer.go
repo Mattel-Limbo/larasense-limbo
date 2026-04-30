@@ -11,6 +11,7 @@ import (
 	"github.com/Mattel-Limbo/larasense-limbo/internal/context"
 	"github.com/Mattel-Limbo/larasense-limbo/internal/diff"
 	"github.com/Mattel-Limbo/larasense-limbo/internal/git"
+	"github.com/Mattel-Limbo/larasense-limbo/internal/ui"
 )
 
 type Issue = ai.Issue
@@ -244,7 +245,11 @@ func (r *Reviewer) analyzeInBatches(files []context.FileContext, mode string) ([
 	var allIssues []ai.Issue
 
 	for i, batch := range batches {
-		log.Printf("Analyzing batch %d/%d (%d files)...", i+1, len(batches), len(batch))
+		label := batch[0].Path
+		if len(batch) > 1 {
+			label = fmt.Sprintf("%s (+%d files)", batch[0].Path, len(batch)-1)
+		}
+		ui.ProgressBar(i, len(batches), label)
 
 		ctx := &context.ReviewContext{Files: batch}
 
@@ -261,11 +266,13 @@ func (r *Reviewer) analyzeInBatches(files []context.FileContext, mode string) ([
 
 		resp, err := client.AnalyzeWithPrompt(systemPrompt, userContent)
 		if err != nil {
+			ui.ProgressBar(i+1, len(batches), "failed")
 			return nil, fmt.Errorf("batch %d/%d failed: %w", i+1, len(batches), err)
 		}
 
 		allIssues = append(allIssues, resp.Issues...)
 	}
+	ui.ProgressBar(len(batches), len(batches), "done")
 
 	return allIssues, nil
 }

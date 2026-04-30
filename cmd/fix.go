@@ -9,9 +9,10 @@ import (
 	"github.com/Mattel-Limbo/larasense-limbo/internal/fixer"
 	"github.com/Mattel-Limbo/larasense-limbo/internal/git"
 	"github.com/Mattel-Limbo/larasense-limbo/internal/reviewer"
+	"github.com/Mattel-Limbo/larasense-limbo/internal/ui"
 )
 
-func handleFixOutput(result *reviewer.Result, fix, apply, yes, dryRun bool, gitBranch, patchPath string) error {
+func handleFixOutput(result *reviewer.Result, fix, apply, yes, dryRun bool, gitBranch, patchPath string, elapsed time.Duration) error {
 	if !fix {
 		return nil
 	}
@@ -38,7 +39,7 @@ func handleFixOutput(result *reviewer.Result, fix, apply, yes, dryRun bool, gitB
 		if err != nil {
 			return fmt.Errorf("dry-run: %w", err)
 		}
-		printFixSummary(applyResult, fixable)
+		printFixSummary(applyResult, fixable, elapsed)
 		return nil
 	}
 
@@ -73,11 +74,11 @@ func handleFixOutput(result *reviewer.Result, fix, apply, yes, dryRun bool, gitB
 		if len(applyResult.Skipped) > 0 {
 			fmt.Printf("\n  ⏭️  Skipped %d fix(es):\n", len(applyResult.Skipped))
 			for _, s := range applyResult.Skipped {
-				fmt.Printf("     ⚠️  %s:%d — %s (%s)\n", s.File, s.Line, s.Title, s.Reason)
+				fmt.Print(ui.FormatSkipReason(s.File, s.Line, s.Title, s.Reason))
 			}
 		}
 
-		printFixSummary(applyResult, fixable)
+		printFixSummary(applyResult, fixable, elapsed)
 
 		if originalBranch != "" && len(applyResult.Applied) > 0 {
 			fmt.Printf("  🌿 Fixes applied on branch: %s\n", gitBranch)
@@ -111,7 +112,7 @@ func setupGitBranch(branchName string) (originalBranch string, err error) {
 	return originalBranch, nil
 }
 
-func printFixSummary(result *fixer.ApplyResult, totalFixable int) {
+func printFixSummary(result *fixer.ApplyResult, totalFixable int, elapsed time.Duration) {
 	applied := len(result.Applied)
 	skipped := len(result.Skipped)
 
@@ -127,6 +128,7 @@ func printFixSummary(result *fixer.ApplyResult, totalFixable int) {
 	fmt.Printf("    Total fixable:  %d\n", totalFixable)
 	fmt.Printf("    ✅ Applied:     %d\n", applied)
 	fmt.Printf("    ⏭️  Skipped:     %d\n", skipped)
+	fmt.Printf("    ⏱️  Duration:    %s\n", ui.FormatDuration(elapsed))
 
 	if len(skippedByReason) > 0 {
 		fmt.Println("    ─────────────────────────────")
@@ -139,7 +141,7 @@ func printFixSummary(result *fixer.ApplyResult, totalFixable int) {
 
 	if applied == 0 && skipped > 0 {
 		fmt.Println("\n  💡 Tip: fixes were skipped because the code didn't match AI's suggestion.")
-		fmt.Println("     Try running with --no-cache to get fresh fix data.")
+		fmt.Println("     Try running with --fresh to get fresh fix data.")
 	}
 
 	fmt.Println()
