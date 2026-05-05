@@ -145,8 +145,11 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("error unmarshaling config: %w", err)
 	}
 
-	// Expand environment variables in api_key (supports ${VAR} syntax)
+	// Expand environment variables in provider fields (supports ${VAR} syntax)
 	cfg.Provider.APIKey = expandEnvVars(cfg.Provider.APIKey)
+	cfg.Provider.BaseURL = expandEnvVars(cfg.Provider.BaseURL)
+	cfg.Provider.Model = expandEnvVars(cfg.Provider.Model)
+	cfg.Provider.Endpoint = expandEnvVars(cfg.Provider.Endpoint)
 
 	// Apply provider preset defaults (only fills empty fields)
 	if cfg.Provider.Name != "" {
