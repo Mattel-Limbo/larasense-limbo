@@ -12,7 +12,7 @@ steps:
     with:
       fetch-depth: 0
 
-  - uses: Mattel-Limbo/larasense-limbo/action@main
+  - uses: Mattel-Limbo/larasense-limbo/action@master
   
   - run: larasense-limbo analyze --base origin/${{ github.base_ref }} --format github
     env:
@@ -22,7 +22,7 @@ steps:
 ### Pin to specific version
 
 ```yaml
-  - uses: Mattel-Limbo/larasense-limbo/action@main
+  - uses: Mattel-Limbo/larasense-limbo/action@master
     with:
       version: "0.5.1"
 ```
@@ -74,7 +74,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: Mattel-Limbo/larasense-limbo/action@main
+      - uses: Mattel-Limbo/larasense-limbo/action@master
 
       - run: larasense-limbo scan --json > audit-report.json
         env:

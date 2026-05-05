@@ -820,7 +820,7 @@ jobs:
           fetch-depth: 0
 
       - name: Setup larasense-limbo
-        uses: Mattel-Limbo/larasense-limbo/action@main
+        uses: Mattel-Limbo/larasense-limbo/action@master
 
       - name: Run AI Code Review
         env:
@@ -840,7 +840,7 @@ This produces inline annotations on the PR:
 #### Pin to a specific version
 
 ```yaml
-      - uses: Mattel-Limbo/larasense-limbo/action@main
+      - uses: Mattel-Limbo/larasense-limbo/action@master
         with:
           version: "0.5.1"
 ```

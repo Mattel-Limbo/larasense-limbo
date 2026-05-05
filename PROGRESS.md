@@ -146,7 +146,7 @@ Status tracking untuk fitur-fitur larasense-limbo.
 |---|-------|--------|---------|
 | 90 | NPM package distribution | ✅ Done | `npm install -g larasense-limbo`, auto-download binary per OS/arch, postinstall script, bin wrapper |
 | 91 | Install script (curl) | ✅ Done | `curl -fsSL .../install.sh \| sh`, auto-detect OS/arch, VERSION/INSTALL_DIR env vars, sudo fallback, PATH check |
-| 92 | GitHub Action | ✅ Done | `uses: Mattel-Limbo/larasense-limbo/action@main`, composite action, cache via actions/cache, auto-detect OS/arch, version input |
+| 92 | GitHub Action | ✅ Done | `uses: Mattel-Limbo/larasense-limbo/action@master`, composite action, cache via actions/cache, auto-detect OS/arch, version input |
 
 ## Future Ideas
 
